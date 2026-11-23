@@ -57,3 +57,6 @@ backups/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Exception : secret de test factice (convention Symfony), nécessaire à la CI
+!api/.env.test

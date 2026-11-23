@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Droits minimaux pour le GITHUB_TOKEN
+permissions:
+  contents: read
+
+# Une seule exécution par branche : la nouvelle annule l'ancienne
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (Symfony)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, pdo_pgsql, redis, sodium, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('api/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Fichier .env (valeurs d'exemple, sans secret)
+        run: cp .env.example .env
+
+      - name: Valider composer.json
+        run: composer validate --strict
+
+      - name: Installer les dépendances
+        run: composer install --no-progress --prefer-dist --no-interaction
+
+      - name: Audit de sécurité des dépendances
+        run: composer audit --no-dev --abandoned=report
+
+      - name: Lint de la configuration
+        run: |
+          php bin/console lint:yaml config --parse-tags
+          php bin/console lint:container
+
+      - name: Tests PHPUnit
+        run: php bin/phpunit --testdox
+
+  front:
+    name: Front (React)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci --no-fund
+
+      - name: Audit de sécurité des dépendances
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Tests Vitest
+        run: npm test
+
+      - name: Build (vérifie aussi les types)
+        run: npm run build
+
+  docker:
+    name: Docker Compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Valider compose.yaml
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+
+  # Seul contrôle exigé par la protection de main : ajouter un job ici ne demande pas de modifier la règle
+  ci-success:
+    name: ci-success
+    if: always()
+    needs: [api, front, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tous les jobs doivent réussir
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Résultats : $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::Un job de la CI n'a pas réussi ($r)"
+              exit 1
+            fi
+          done

@@ -8,7 +8,7 @@ services:
     volumes:
       - ./api:/var/www/api
     environment:
-      APP_ENV: dev
+      # APP_ENV vient de api/.env (dev) : ne pas le forcer ici, sinon PHPUnit ne passe plus en "test"
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}?serverVersion=17&charset=utf8"
       REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
       XDEBUG_MODE: ${XDEBUG_MODE:-off}
