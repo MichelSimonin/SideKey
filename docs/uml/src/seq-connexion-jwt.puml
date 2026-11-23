@@ -1,0 +1,109 @@
+@startuml seq-connexion-jwt
+' ============================================================================
+' SideKey — Séquence : connexion, jetons JWT, rafraîchissement et révocation
+' Scénario  : POST /api/login, POST /api/2fa/check, POST /api/token/refresh, POST /api/logout — A2F, rotation, révocation
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §5.3, §9.8, §11.4, §14.4
+' Exports   : docs/uml/exports/seq-connexion-jwt.svg et seq-connexion-jwt.png
+' ============================================================================
+autonumber
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam wrapWidth 760
+skinparam maxMessageSize 380
+skinparam sequence {
+  ArrowColor #455A64
+  ArrowFontColor #37474F
+  ParticipantBorderColor #37474F
+  ParticipantBackgroundColor #F7F9FB
+  LifeLineBorderColor #455A64
+  GroupBorderColor #37474F
+  GroupHeaderFontColor #1565C0
+  NoteBorderColor #37474F
+  DividerBackgroundColor #E3EAF0
+}
+
+participant "Client" as Client <<SPA>>
+participant "SecurityController" as Ctrl <<Controller/Api>>
+participant "JwtAuthenticator" as JwtAuth <<Security>>
+participant "UtilisateurRepository" as Repo <<Repository>>
+participant "PasswordHasher" as Hasher <<Security>>
+participant "TotpService" as Totp <<A2F>>
+participant "RefreshTokenService" as Refresh <<Service>>
+participant "Redis" as Redis <<NoSQL>>
+participant "JournalAuditService" as Audit <<Service>>
+
+== 1. Connexion — POST /api/login ==
+Client -> Ctrl : POST /api/login { email, mot_de_passe }
+activate Ctrl
+Ctrl -> Redis : RateLimiter : INCR rl:login:{ip} (TTL 15 min)
+note over Ctrl, Redis : compteur par IP, fenêtre glissante de 15 min (seuil paramétrable) ;\nau-delà : 429, sans même vérifier le mot de passe.
+Ctrl -> Repo : findByEmail(email)
+Repo --> Ctrl : utilisateur | null
+Ctrl -> Hasher : verify(mot_de_passe_hash argon2id, mot_de_passe)
+Hasher --> Ctrl : true | false
+alt Utilisateur absent, inactif ou mot de passe faux
+  Ctrl --> Client : 401 Unauthorized { « Identifiants invalides » }
+  note over Ctrl : même réponse et même latence : pas d'énumération de comptes.
+else Identifiants valides
+  Ctrl -> JwtAuth : a2f_active ? rôle back-office ?
+  JwtAuth --> Ctrl : A2F requise | absente | inutile
+  alt A2F active
+    Ctrl --> Client : 202 { jeton_intermediaire } (scope 2fa, 5 min) → POST /api/2fa/check
+    Client -> Ctrl : POST /api/2fa/check { code TOTP à 6 chiffres }
+    Ctrl -> Totp : verify(secret TOTP déchiffré, code)
+    Totp --> Ctrl : valide | invalide
+    note over Ctrl : code invalide → 401 ; 5 échecs → jeton intermédiaire invalidé.
+  else Rôle back-office sans A2F
+    Ctrl --> Client : 403 Forbidden { « A2F obligatoire » }
+  end
+  Ctrl -> Refresh : emettreJetons(utilisateur)
+  Refresh -> Redis : SET refresh:{jti} userId EX 604800
+  note over Refresh, Redis : TTL 7 j = cookie ; accès JWT 15 min + refresh opaque 7 j, jti unique.
+  Refresh --> Ctrl : access_token + refresh_token
+  Ctrl -> Audit : log(CONNEXION_REUSSIE, userId, ip_hachee)
+  Ctrl --> Client : 200 { access_token } + Set-Cookie refresh=…; HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh
+  note over Client : jeton d'accès gardé en mémoire du client HTTP, jamais dans localStorage.
+end
+deactivate Ctrl
+== 2. Rafraîchissement — POST /api/token/refresh ==
+Client -> Ctrl : POST /api/token/refresh (cookie HttpOnly)
+activate Ctrl
+Ctrl -> Ctrl : vérifie Origin + jeton CSRF (double soumission)
+' Seule route à cookie : SameSite=Strict, Origin et double soumission couvrent le CSRF.
+alt Origin ou jeton CSRF invalide
+  Ctrl --> Client : 403 Forbidden { « Requête refusée » }
+else Contrôles valides
+  Ctrl -> Refresh : consommer(jeton) — rotation à usage unique
+  Refresh -> Redis : GET refresh:{jti} puis DEL atomique
+  Redis --> Refresh : userId | nil
+  alt Jeton inconnu, expiré ou déjà consommé
+    Refresh -> Redis : DEL de tous les refresh:{jti} de la famille
+    note over Refresh, Redis : réutilisation détectée → révocation de toute la famille (§11.4).
+    Refresh --> Ctrl : ReuseDetectedException
+    Ctrl --> Client : 401 Unauthorized + cookie de rafraîchissement effacé
+  else Jeton valide
+    Refresh -> Redis : SET refresh:{jti} userId EX 604800
+    Refresh --> Ctrl : nouveau access_token + nouveau refresh_token
+    Ctrl --> Client : 200 { access_token } + Set-Cookie refresh=…; HttpOnly; Secure; SameSite=Strict
+  end
+end
+deactivate Ctrl
+== 3. Déconnexion — POST /api/logout ==
+Client -> Ctrl : POST /api/logout (Authorization: Bearer + cookie refresh)
+Ctrl -> JwtAuth : valider signature, exp et jwt:deny:{jti}
+JwtAuth --> Ctrl : jti et exp valides
+Ctrl -> Refresh : supprimer le jeton de rafraîchissement courant
+Refresh -> Redis : DEL refresh:{jti}
+Ctrl -> Redis : SET jwt:deny:{jti} 1 EX (exp - now) — TTL de la vie restante
+' TTL = vie restante : la liste de révocation s'auto-nettoie, sans balayage manuel.
+Ctrl -> Audit : log(DECONNEXION, userId)
+Ctrl --> Client : 204 No Content + Set-Cookie refresh=; Max-Age=0; Path=/api/token/refresh
+note over Client, Redis
+  <b>Pourquoi le jeton d'accès n'est jamais dans localStorage</b> : une faille XSS lit
+  localStorage ; une variable en mémoire meurt avec l'onglet et reste hors de portée du script injecté.
+  <b>Codes d'échec</b> : 401 = identifiants ou code TOTP invalides, jeton de rafraîchissement
+  inconnu ou réutilisé, JWT expiré, falsifié ou révoqué (jwt:deny:{jti}) ; 403 = A2F manquante
+  sur un rôle back-office, Origin ou jeton CSRF invalide ; 429 = limitation de débit (rl:login:{ip}).
+end note
+
+@enduml

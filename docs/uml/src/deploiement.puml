@@ -1,0 +1,140 @@
+@startuml deploiement
+' ============================================================================
+' SideKey — Déploiement
+' Notation  : diagramme de déploiement UML (nodes, artifacts, databases, clouds)
+' Objet     : poste de développement Docker, CI/CD GitHub, recette et production
+'             sur un VPS situé dans l'UE
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §8.1, §15, §12.1
+' Exports   : docs/uml/exports/deploiement.svg et deploiement.png (make uml)
+' ============================================================================
+
+title Déploiement — SideKey\n<size:12>Développement Docker · CI/CD GitHub · recette et production sur un VPS dans l'UE (CDC §15)</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+
+skinparam nodesep 24
+skinparam ranksep 40
+skinparam ArrowFontSize 11
+skinparam wrapWidth 200
+skinparam noteBackgroundColor #F7F9FB
+skinparam noteBorderColor #90A4AE
+skinparam noteFontSize 11
+skinparam node {
+  BackgroundColor #FFFFFF
+  BorderColor #37474F
+}
+skinparam cloud {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+}
+skinparam artifact {
+  BackgroundColor #FFFFFF
+  BorderColor #546E7A
+}
+skinparam database {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+}
+
+node "Navigateur\ndesktop · mobile" as browser
+
+node "Poste de développement" as dev {
+  node "Docker Compose — projet sidekey" as devcompose {
+    artifact "front — node:24-alpine\nVite, port 5173 → 127.0.0.1:5173" as devfront
+    artifact "nginx — nginx:1.28-alpine\nAPI, port 8000 → 127.0.0.1:8000" as devnginx
+    artifact "php — PHP 8.4-FPM\n+ Xdebug" as devphp
+    database "database — postgres:17-alpine\n127.0.0.1:5432" as devpg
+    database "redis — redis:8-alpine\n127.0.0.1:6379" as devredis
+  }
+}
+
+cloud "GitHub" as github {
+  artifact "Dépôt Git\nbranche main protégée · pull requests" as repo
+  artifact "GitHub Actions\nCI : lint, tests, audit, Trivy\nCD : images poussées dans GHCR" as actions
+  artifact "GHCR\nimages taguées SHA du commit" as ghcr
+  artifact "Secrets et Environments\nstaging · production" as secrets
+  artifact "GitHub Projects\nbacklog · issues" as projects
+}
+
+cloud "Hébergement UE — VPS" as vps {
+  node "Recette (staging)" as staging {
+    artifact "Caddy\nTLS Let's Encrypt" as stcaddy
+    artifact "API Symfony\nnginx + php-fpm" as stapi
+    artifact "Front React\nbuild statique" as stfront
+    database "PostgreSQL 17" as stpg
+    database "Redis 8" as stredis
+    artifact "Worker Symfony Messenger" as stworker
+    artifact "Mailpit\nSMTP de capture" as stmailpit
+    artifact "PSP simulé" as stpsp
+    artifact "Sauvegardes\npg_dump -Fc" as stbackup
+  }
+  node "Production" as prod {
+    artifact "Caddy\nTLS Let's Encrypt" as prcaddy
+    artifact "API Symfony\nnginx + php-fpm" as prapi
+    artifact "Front React\nbuild statique" as prfront
+    database "PostgreSQL 17" as prpg
+    database "Redis 8" as prredis
+    artifact "Worker Symfony Messenger" as prworker
+    artifact "Mailpit\nSMTP de capture" as prmailpit
+    artifact "PSP simulé" as prpsp
+    artifact "Sauvegardes\npg_dump -Fc quotidien" as prbackup
+  }
+}
+
+browser --> stcaddy : HTTPS
+browser --> prcaddy : HTTPS
+stcaddy --> stfront : front statique
+stcaddy --> stapi : proxy inverse\nnginx + php-fpm
+stapi --> stpg : SQL paramétré
+stapi --> stredis : réservation · cache · jetons
+stapi --> stpsp : paiement simulé
+stworker --> stmailpit : SMTP
+prapi --> prpg : SQL paramétré
+prapi --> prredis : réservation · cache · jetons
+prapi --> prpsp : paiement simulé
+prworker --> prmailpit : SMTP
+
+devcompose --> repo : push · pull request
+repo --> actions : push · PR
+actions --> ghcr : images
+secrets -.-> actions : secrets par environnement
+actions --> staging : déploiement SSH\ndocker compose pull && up -d
+ghcr --> staging : pull des images
+staging --> prod : tag vX.Y.Z\napprobation manuelle
+
+note right of devcompose
+  Ports publiés sur **127.0.0.1** uniquement ; Xdebug est
+  installé mais désactivé par défaut.
+end note
+
+note bottom of github
+  `main` protégée : PR, revue et CI verte obligatoires ;
+  aucun secret dans le dépôt (secret scanning activé).
+end note
+
+note right of staging
+  À chaque fusion dans `main` : sauvegarde de la base,
+  migrations Doctrine (`sk_owner`), tests de fumée,
+  ZAP baseline et k6. Jeu d'essai.
+end note
+
+note right of prod
+  **Mêmes images** que la recette (tag = SHA du commit),
+  jamais reconstruites : promotion par tag `vX.Y.Z` et
+  approbation manuelle (GitHub Environments).
+  **Retour arrière** : redéploiement du tag précédent ;
+  si une migration pose problème, `pg_restore --clean`
+  de la sauvegarde quotidienne prise avant migration.
+end note
+
+note bottom of vps
+  **Données hébergées dans l'UE, aucune donnée personnelle hors UE**
+  (RGPD art. 5.1.e, décisions B10 et BX-17).
+end note
+
+@enduml

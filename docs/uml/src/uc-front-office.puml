@@ -1,0 +1,200 @@
+@startuml uc-front-office
+' ============================================================================
+' SideKey — Cas d'utilisation : parcours client (front-office)
+' Objet     : cas détaillés du parcours client, avec <<include>> et <<extend>>
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §5.1 à §5.5, §6, §7.2, §11.5
+' Exports   : docs/uml/exports/uc-front-office.svg et uc-front-office.png
+' Numérotation : UC-20 à UC-45 (la vue globale utilise UC-01 à UC-18,
+'                le back-office UC-50 à UC-66).
+' ============================================================================
+
+title Cas d'utilisation — parcours client (front-office)\n<size:12>Catalogue · panier · compte · commande et paiement · clés · avis</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #90A4AE
+}
+
+' Réglages de lisibilité ajoutés au style imposé
+left to right direction
+skinparam nodesep 26
+skinparam ranksep 60
+skinparam ArrowFontSize 11
+skinparam usecaseFontSize 12
+
+' ---------------------------------------------------------------------------
+' Acteurs (CDC §4.1)
+' ---------------------------------------------------------------------------
+actor "Visiteur" as visiteur
+actor "Client" as client
+actor "PSP simulé" as psp <<système>>
+actor "Serveur SMTP\n(Mailpit en dev)" as smtp <<système>>
+
+' Le client peut tout ce que fait le visiteur (matrice RBAC §11.5) : la
+' généralisation évite de répéter les associations catalogue et panier.
+client -up-|> visiteur
+
+' ---------------------------------------------------------------------------
+' Catalogue (US-01 à US-05)
+' ---------------------------------------------------------------------------
+rectangle "Catalogue" as CAT {
+  usecase "UC-20\nConsulter le catalogue" as UC20
+  usecase "UC-21\nFiltrer et trier" as UC21
+  usecase "UC-22\nRechercher un jeu" as UC22
+  usecase "UC-23\nConsulter une fiche jeu" as UC23
+}
+
+' ---------------------------------------------------------------------------
+' Panier (US-10 à US-13)
+' ---------------------------------------------------------------------------
+rectangle "Panier" as PAN {
+  usecase "UC-24\nAjouter une offre au panier" as UC24
+  usecase "UC-25\nConsulter et modifier\nson panier" as UC25
+  usecase "UC-26\nRetrouver son panier\nà la connexion" as UC26
+}
+
+' ---------------------------------------------------------------------------
+' Compte client (US-20 à US-25)
+' ---------------------------------------------------------------------------
+rectangle "Compte client" as CPT {
+  usecase "UC-27\nCréer un compte" as UC27
+  usecase "UC-28\nS'authentifier" as UC28
+  usecase "UC-29\nActiver l'A2F (TOTP)" as UC29
+  usecase "UC-30\nRéinitialiser\nson mot de passe" as UC30
+  usecase "UC-31\nModifier son profil\net sa langue" as UC31
+  usecase "UC-32\nExporter ou supprimer\nses données" as UC32
+}
+
+' ---------------------------------------------------------------------------
+' Commande et paiement (US-30 à US-33, US-36)
+' ---------------------------------------------------------------------------
+rectangle "Commande et paiement" as CMD {
+  usecase "UC-33\nPasser commande" as UC33
+  usecase "UC-34\nPayer sa commande" as UC34
+  usecase "UC-35\nRéserver les clés\n(15 min)" as UC35
+  usecase "UC-36\nRecevoir la confirmation" as UC36
+  usecase "UC-39\nRéessayer un paiement\nrefusé" as UC39
+}
+
+' ---------------------------------------------------------------------------
+' Clés et avis (US-34, US-35, US-40, US-41)
+' ---------------------------------------------------------------------------
+rectangle "Clés et avis" as CLE {
+  usecase "UC-37\nRévéler ses clés" as UC37
+  usecase "UC-38\nConsulter ses commandes" as UC38
+  usecase "UC-40\nDéposer un avis" as UC40
+  usecase "UC-41\nModifier ou supprimer\nson avis" as UC41
+}
+
+' ---------------------------------------------------------------------------
+' Contrôles et services transverses
+' ---------------------------------------------------------------------------
+rectangle "Contrôles et services" as CTRL {
+  usecase "UC-42\nVérifier la propriété\n(Voter)" as UC42
+  usecase "UC-43\nConfirmer la majorité\n(PEGI 18)" as UC43
+  usecase "UC-44\nJournaliser l'action\n(audit)" as UC44
+  usecase "UC-45\nAppeler le PSP simulé" as UC45
+}
+
+' ---------------------------------------------------------------------------
+' Associations acteur → cas d'utilisation
+' ---------------------------------------------------------------------------
+visiteur --> UC20
+visiteur --> UC21
+visiteur --> UC22
+visiteur --> UC23
+visiteur --> UC24
+visiteur --> UC25
+visiteur --> UC27
+visiteur --> UC28
+visiteur --> UC30
+
+client --> UC29
+client --> UC31
+client --> UC32
+client --> UC33
+client --> UC34
+client --> UC37
+client --> UC38
+client --> UC40
+client --> UC41
+
+' ---------------------------------------------------------------------------
+' Relations <<include>> : étape obligatoire du cas de base
+' ---------------------------------------------------------------------------
+UC33 ..> UC28 : <<include>>
+UC37 ..> UC28 : <<include>>
+UC40 ..> UC28 : <<include>>
+UC38 ..> UC28 : <<include>>
+
+UC37 ..> UC42 : <<include>>
+UC38 ..> UC42 : <<include>>
+
+' US-31 : la réservation court « pendant que je paie » ; le CDC la rattache
+' au paiement, d'où l'include depuis UC-34 et non depuis UC-33.
+UC34 ..> UC35 : <<include>>
+UC34 ..> UC45 : <<include>>
+
+' ---------------------------------------------------------------------------
+' Relations <<extend>> : comportement conditionnel du cas de base
+' La flèche part du cas qui étend et pointe vers le cas de base.
+' ---------------------------------------------------------------------------
+UC33 <.. UC43 : <<extend>>\n(panier avec un jeu PEGI 18)
+UC34 <.. UC36 : <<extend>>\n(paiement accepté)
+UC34 <.. UC39 : <<extend>>\n(paiement refusé)
+UC37 <.. UC44 : <<extend>>
+UC34 <.. UC44 : <<extend>>
+UC28 <.. UC26 : <<extend>>\n(panier visiteur non vide)
+
+' Systèmes externes appelés par les cas.
+UC45 --> psp
+UC27 --> smtp
+UC30 --> smtp
+UC36 --> smtp
+
+' ---------------------------------------------------------------------------
+' Légende : correspondance UC → US → besoin → priorité
+' ---------------------------------------------------------------------------
+legend right
+  <b>Correspondance UC-nn → US-nn → besoin BX-nn → priorité MoSCoW</b>
+  |= UC |= US |= Besoins (BX) |= MoSCoW |
+  | UC-20 | US-01 | BX-01 | M |
+  | UC-21 | US-02, US-05 | BX-01, BX-09 | M + S |
+  | UC-22 | US-03 | BX-01 | M |
+  | UC-23 | US-04 | BX-03, BX-09 | M |
+  | UC-24 | US-10 | BX-04 | M |
+  | UC-25 | US-11, US-13 | BX-03, BX-04 | M |
+  | UC-26 | US-12 | BX-04 | S |
+  | UC-27 | US-20 | BX-03 | M |
+  | UC-28 | US-21 | BX-03 | M |
+  | UC-29 | US-22 | BX-07 | S |
+  | UC-30 | US-23 | BX-03 | S |
+  | UC-31 | US-24 | BX-06 | M |
+  | UC-32 | US-25 | BX-17 | S |
+  | UC-33 | US-30 | BX-04 | M |
+  | UC-34 | US-32 | BX-04 | M |
+  | UC-35 | US-31 | BX-03 | M |
+  | UC-36 | US-33 | BX-02 | M |
+  | UC-37 | US-34 | BX-02, BX-16 | M |
+  | UC-38 | US-35 | BX-02 | M |
+  | UC-39 | US-36 | BX-04 | M |
+  | UC-40 | US-40 | BX-03 | S |
+  | UC-41 | US-41 | BX-03 | S |
+  | UC-42 | US-34, US-35 (contrôle) | BX-03 | M |
+  | UC-43 | US-30 (RG-13) | BX-09 | M |
+  | UC-44 | US-34, US-32 (preuve) | BX-16 | M |
+  | UC-45 | US-32 (§11.6) | BX-04 | M |
+end legend
+
+@enduml

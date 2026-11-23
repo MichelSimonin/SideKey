@@ -1,0 +1,167 @@
+@startuml uc-global
+' ============================================================================
+' SideKey — Cas d'utilisation : vue globale
+' Objet     : acteurs, frontière du système, grandes fonctions par domaine,
+'             acteurs secondaires (PSP simulé, serveur SMTP) et acteur « temps »
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §4.1, §5, §6, §7, §11.5
+' Exports   : docs/uml/exports/uc-global.svg et uc-global.png (make uml)
+' Numérotation : UC-01 à UC-18 ici ; le détail est en UC-20..UC-45
+'                (uc-front-office) et UC-50..UC-67 (uc-back-office).
+' ============================================================================
+
+title Cas d'utilisation — vue globale\n<size:12>Acteurs · frontière du système · grandes fonctions · acteurs secondaires</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #90A4AE
+}
+
+' Réglages de lisibilité ajoutés au style imposé
+skinparam nodesep 30
+skinparam ranksep 55
+skinparam ArrowFontSize 11
+skinparam usecaseFontSize 12
+
+' ---------------------------------------------------------------------------
+' Acteurs internes (CDC §4.1)
+' ---------------------------------------------------------------------------
+actor "Visiteur" as visiteur
+actor "Client" as client
+actor "Gestionnaire\ncatalogue" as gestionnaire
+actor "Modérateur" as moderateur
+actor "Administrateur" as admin
+
+' ---------------------------------------------------------------------------
+' Acteurs secondaires : systèmes externes et acteur « temps » (CDC §4.1)
+' ---------------------------------------------------------------------------
+actor "PSP simulé" as psp <<système>>
+actor "Serveur SMTP\n(Mailpit en dev)" as smtp <<système>>
+actor "Tâche planifiée" as tache <<temps>>
+
+' Généralisations d'acteurs justifiées par la matrice RBAC (CDC §11.5) :
+' le client peut tout ce que fait le visiteur ; l'administrateur cumule les
+' permissions du gestionnaire et du modérateur. On factorise les associations
+' sans prêter de permission supplémentaire à un acteur.
+client -up-|> visiteur
+admin -up-|> gestionnaire
+admin -up-|> moderateur
+
+' ---------------------------------------------------------------------------
+' Front-office : parcours client (détail dans uc-front-office.puml)
+' ---------------------------------------------------------------------------
+rectangle "Boutique en ligne (front-office)" as FRONT {
+  usecase "UC-01\nConsulter le catalogue" as UC01
+  usecase "UC-02\nGérer son panier" as UC02
+  usecase "UC-03\nGérer son compte client" as UC03
+  usecase "UC-04\nCommander et payer" as UC04
+  usecase "UC-05\nConsulter ses commandes\net révéler ses clés" as UC05
+  usecase "UC-06\nDéposer un avis" as UC06
+}
+
+' ---------------------------------------------------------------------------
+' Socle transverse et systèmes externes
+' ---------------------------------------------------------------------------
+rectangle "Socle et systèmes externes" as SOCLE {
+  usecase "UC-15\nCréer un compte\net s'authentifier" as UC15
+  usecase "UC-16\nVérifier l'A2F (TOTP)" as UC16
+  usecase "UC-17\nExpirer les réservations" as UC17
+  usecase "UC-18\nNotifier par e-mail" as UC18
+}
+
+' ---------------------------------------------------------------------------
+' Back-office : administration de la boutique (détail dans uc-back-office.puml)
+' ---------------------------------------------------------------------------
+rectangle "Back-office" as BACK {
+  usecase "UC-07\nGérer le catalogue\net les offres" as UC07
+  usecase "UC-08\nImporter des clés (CSV)" as UC08
+  usecase "UC-09\nSuivre les commandes" as UC09
+  usecase "UC-10\nTraiter les commandes\nsuspectes" as UC10
+  usecase "UC-11\nModérer les avis" as UC11
+  usecase "UC-12\nGérer les comptes\net les rôles" as UC12
+  usecase "UC-13\nConsulter le journal\nd'audit" as UC13
+  usecase "UC-14\nConsulter le tableau\nde bord" as UC14
+}
+
+' ---------------------------------------------------------------------------
+' Associations acteur → cas d'utilisation (CDC §11.5)
+' ---------------------------------------------------------------------------
+visiteur --> UC01
+visiteur --> UC02
+visiteur --> UC15
+
+client --> UC03
+client --> UC04
+client --> UC05
+client --> UC06
+
+gestionnaire --> UC07
+gestionnaire --> UC08
+gestionnaire --> UC09
+
+moderateur --> UC11
+
+' L'administrateur hérite des associations du gestionnaire et du modérateur ;
+' il ne porte que ses cas propres : file « à vérifier », rôles, audit, tableau de bord.
+admin --> UC10
+admin --> UC12
+admin --> UC13
+admin --> UC14
+
+' Acteur « temps » : l'expiration n'est déclenchée par aucun utilisateur (§9.6).
+tache --> UC17
+
+' Systèmes externes : le cas d'utilisation appelle le système, l'inverse n'arrive pas.
+UC04 --> psp
+UC18 --> smtp
+
+' L'A2F est facultative pour un client et obligatoire pour un rôle back-office
+' (§11.4) : dans la vue globale, elle est donc modélisée en <<extend>> de
+' l'authentification. Dans uc-back-office.puml, où tous les acteurs y sont
+' soumis, elle devient un <<include>> de chaque cas métier.
+UC16 ..> UC15 : <<extend>>\n(A2F activée ou rôle back-office)
+
+' Les autres <<include>> et <<extend>> (propriété, réservation, PSP, journalisation)
+' sont détaillés dans uc-front-office.puml et uc-back-office.puml : la vue
+' globale reste lisible et non redondante avec les deux vues détaillées.
+
+' ---------------------------------------------------------------------------
+' Légende : correspondance UC → US → besoin → priorité
+' ---------------------------------------------------------------------------
+legend right
+  <b>Correspondance UC-nn → US-nn → besoin BX-nn → priorité MoSCoW</b>
+  |= UC |= US couvertes |= Besoins (BX) |= MoSCoW |
+  | UC-01 | US-01 à US-05 | BX-01, BX-03, BX-09 | M + S |
+  | UC-02 | US-10 à US-13 | BX-03, BX-04 | M + S |
+  | UC-03 | US-24, US-25 | BX-06, BX-17 | M + S |
+  | UC-04 | US-30 à US-33, US-36 | BX-02, BX-04 | M |
+  | UC-05 | US-34, US-35 | BX-02, BX-16 | M |
+  | UC-06 | US-40, US-41 | BX-03 | S |
+  | UC-07 | US-50, US-51, US-53 | BX-12, BX-14 | M + S |
+  | UC-08 | US-52 | BX-11, BX-13 | M |
+  | UC-09 | US-54 | BX-12 | M |
+  | UC-10 | US-56 | BX-15 | M |
+  | UC-11 | US-42 | BX-20 | S |
+  | UC-12 | US-55 | BX-18 | M |
+  | UC-13 | US-57 | BX-16 | S |
+  | UC-14 | US-58 | BX-12 | C |
+  | UC-15 | US-20, US-21, US-23 | BX-03 | M + S |
+  | UC-16 | US-22 | BX-07, BX-18 | S |
+  | UC-17 | US-31 (règle RG-12) | BX-03 | M |
+  | UC-18 | US-20, US-23, US-33 | BX-02 | M |
+  <i>UC-17 et UC-18 traduisent des règles et des critères d'acceptation</i>
+  <i>(RG-12, e-mails de vérification, de réinitialisation, de confirmation) :</i>
+  <i>aucune user story dédiée, d'où la référence aux US qui les mentionnent.</i>
+end legend
+
+@enduml

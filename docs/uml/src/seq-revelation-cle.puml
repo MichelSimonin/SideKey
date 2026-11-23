@@ -1,0 +1,106 @@
+@startuml seq-revelation-cle
+' ============================================================================
+' SideKey — Séquence : révélation d'une clé par son propriétaire (écran E09)
+' Scénario  : GET /api/commandes/{reference}/cles — propriété, statut PAYEE,
+'             déchiffrement AES-256-GCM, journal d'audit, variante back-office
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §9.4, §11.5, §14.4
+' Exports   : docs/uml/exports/seq-revelation-cle.svg et seq-revelation-cle.png
+' ============================================================================
+
+autonumber
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam wrapWidth 760
+skinparam maxMessageSize 380
+skinparam sequence {
+  ArrowColor #455A64
+  ArrowFontColor #37474F
+  ParticipantBorderColor #37474F
+  ParticipantBackgroundColor #F7F9FB
+  LifeLineBorderColor #455A64
+  GroupBorderColor #37474F
+  GroupHeaderFontColor #1565C0
+  NoteBorderColor #37474F
+  DividerBackgroundColor #E3EAF0
+}
+
+participant "Client" as Client <<SPA · E09>>
+participant "CommandeController" as Ctrl <<Controller/Api>>
+participant "CleLicenceVoter" as Voter <<Security/Voter>>
+participant "LicenceService" as Svc <<Service>>
+participant "CleLicenceRepository" as Repo <<Repository>>
+participant "ChiffreurAesGcm" as Crypto <<Infrastructure/Crypto>>
+participant "JournalAuditService" as Audit <<Service>>
+database "base PostgreSQL" as PG
+
+== Révélation — GET /api/commandes/{reference}/cles ==
+Client -> Ctrl : GET /api/commandes/{reference}/cles\nAuthorization: Bearer <jwt>
+activate Ctrl
+Ctrl -> Ctrl : authentifie le JWT (signature, exp, jwt:deny:{jti})
+note over Ctrl : 401 si jeton absent, expiré, falsifié ou révoqué.
+Ctrl -> Voter : estAutorise(utilisateur, reference)
+Voter -> Repo : findCommandeParReference(reference)
+Repo -> PG : SELECT … FROM commande WHERE reference = :reference
+PG --> Repo : commande | null
+Repo --> Voter : commande | null
+' La reference est l'UUID exposé : l'id technique de la commande ne sort jamais de l'API.
+alt Commande introuvable
+  Voter --> Ctrl : refus
+  Ctrl --> Client : 404 Not Found { message générique }
+  note over Ctrl : aucun identifiant, aucune donnée de commande dans le corps.
+else Commande d'un autre client, ou statut ≠ PAYEE
+  Voter --> Ctrl : refus
+  Ctrl --> Client : 403 Forbidden { message générique }
+  note over Ctrl : contrôle de propriété et de statut dans le Voter : anti-IDOR (§11.5), réponse minimale.
+else Propriétaire et commande PAYEE
+  Voter --> Ctrl : autorisé
+  Ctrl -> Svc : reveler(commande)
+  activate Svc
+  Svc -> Repo : findVendues(commande)
+  Repo -> PG : SELECT id, cle_chiffree FROM cle_licence\nWHERE ligne_commande_id IN (…) AND statut = 'VENDUE'
+  PG --> Repo : clés chiffrées (IV + tag)
+  Repo --> Svc : collection de clés VENDUE
+  Svc -> Crypto : dechiffrerLot(cles_chiffrees)
+  activate Crypto
+  Crypto -> Crypto : AES-256-GCM : IV du chiffré, vérification du tag
+  ' Un tag faux fait échouer tout le lot : aucune clé partielle n'est renvoyée (fail securely).
+  alt Tag d'authentification invalide (clé altérée)
+    Crypto --> Svc : AuthenticatedEncryptionException
+    Svc --> Ctrl : 500 { erreur interne }
+    note over Svc : exception avant toute écriture : aucune clé renvoyée, revelee_le inchangé.
+  else Toutes les clés authentiques
+    Crypto --> Svc : clés en clair (mémoire seulement)
+    loop Chaque clé VENDUE
+      Svc -> Repo : marquerRevelee(cle, now())
+      Repo -> PG : UPDATE cle_licence SET revelee_le = now() WHERE id = :id
+      Svc -> Audit : log(CLE_REVELEE, ressource_id = cle.id)
+    end
+    note over Audit : action, ressource et identifiant seulement : jamais la clé, même chiffrée.
+    Svc --> Ctrl : clés en clair
+    Ctrl --> Client : 200 { reference, cles: […] } + Cache-Control: no-store
+    note over Client : clé affichée une fois sur E09 : ni localStorage, ni cache ; no-store interdit la reprise.
+  end
+  deactivate Crypto
+  deactivate Svc
+end
+deactivate Ctrl
+
+alt Variante back-office — administrateur, écran E14 (BX-13)
+  Client -> Ctrl : GET /api/admin/commandes/{reference}/cles\nAuthorization: Bearer <jwt admin>
+  activate Ctrl
+  Ctrl -> Voter : vote(utilisateur, 'CLE_CONSULTER_MASQUEE')
+  Voter --> Ctrl : autorisé (ADMIN + A2F validée)
+  Ctrl -> Svc : listerMasquees(commande)
+  Svc -> Repo : findVenduesAvecMasque(commande)
+  Repo -> PG : SELECT cle_masquee FROM cle_licence WHERE …
+  PG --> Repo : suffixes de 4 caractères
+  Repo --> Svc : clés masquées
+  note over Svc, Repo : aucun appel au ChiffreurAesGcm : le back-office ne déchiffre jamais.
+  Svc --> Ctrl : « ••••••••7K2P », « ••••••••3M8D »
+  Ctrl -> Audit : log(CLE_CONSULTEE, ressource_id = cle.id)
+  Ctrl --> Client : 200 { cles: [ « ••••••••7K2P » ] }
+  note over Client : 4 derniers caractères seulement : moindre privilège (BX-13).
+  deactivate Ctrl
+end
+
+@enduml

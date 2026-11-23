@@ -1,0 +1,175 @@
+@startuml classes-catalogue
+' ============================================================================
+' SideKey — Diagramme de classes : catalogue et clés de licence
+' Objet    : modèle de domaine de la couche métier (entités Doctrine,
+'            énumérations, objets-valeurs) et relations.
+' Source   : docs/cahier_des_charges_v1.2_SideKey.md §6.1, §8.3, §9.2, §9.4
+' Exports  : docs/uml/exports/classes-catalogue.svg et .png (make uml)
+' ============================================================================
+
+title Classes — catalogue et clés de licence\n<size:12>Entités Doctrine, énumérations et objets-valeurs (namespace Api\\Entity)</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam ClassBackgroundColor #F7F9FB
+skinparam ClassBorderColor #37474F
+skinparam ClassHeaderBackgroundColor #E3EAF0
+
+hide circle
+hide empty members
+
+package "Référentiels" #FFFFFF {
+  class "Langue" as Langue <<entity, lecture seule>> {
+    - code : string «2»
+    - libelle : string
+  }
+
+  class "Editeur" as Editeur <<entity>> {
+    - id : Uuid
+    - nom : string
+    + renommer(nom : string) : void
+  }
+
+  class "Plateforme" as Plateforme <<entity>> {
+    - id : Uuid
+    - code : string
+    - libelle : string
+  }
+
+  class "Genre" as Genre <<entity>> {
+    - id : Uuid
+    - slug : string
+    + libelle(langue : Langue) : string
+  }
+
+  class "GenreTraduction" as GenreTraduction <<entity>> {
+    - langue : Langue
+    - libelle : string
+  }
+
+  class "Pegi" as Pegi <<enumération>> {
+    P3 = 3
+    P7 = 7
+    P12 = 12
+    P16 = 16
+    P18 = 18
+  }
+}
+
+package "Catalogue" #FFFFFF {
+  class "Jeu" as Jeu <<entity>> {
+    - id : Uuid
+    - titre : string
+    - slug : string
+    - dateSortie : ?DateTimeImmutable
+    - pegi : Pegi
+    - jaquette : ?string
+    - actif : bool
+    + traduction(langue : Langue) : JeuTraduction
+    + prixMinimum() : decimal
+  }
+
+  class "JeuTraduction" as JeuTraduction <<entity>> {
+    - langue : Langue
+    - description : string
+  }
+
+  class "Offre" as Offre <<entity>> {
+    - id : Uuid
+    - prixTtc : decimal
+    - seuilAlerte : int
+    - actif : bool
+    - version : int «verrou optimiste»
+    + estEnStockBas() : bool
+    + desactiver() : void
+  }
+}
+
+package "Clés de licence" #FFFFFF {
+  class "CleLicence" as CleLicence <<entity>> {
+    - id : Uuid
+    - cleChiffree : CleChiffree
+    - empreinte : Empreinte
+    - statut : StatutCle
+    - importeeLe : DateTimeImmutable
+    - reserveeLe : ?DateTimeImmutable
+    - reveleeLe : ?DateTimeImmutable
+    + reserver() : void
+    + liberer() : void
+    + vendre() : void
+    + estVendue() : bool
+  }
+
+  class "ImportCles" as ImportCles <<entity>> {
+    - id : Uuid
+    - fichierNom : string
+    - nbLignes : int
+    - nbAcceptees : int
+    - nbDoublons : int
+    - nbErreurs : int
+    - statut : StatutImport
+    - creeLe : DateTimeImmutable
+    + ajouterRapport(acceptees : int, doublons : int, erreurs : int) : void
+  }
+
+  class "StatutCle" as StatutCle <<enumération>> {
+    DISPONIBLE
+    RESERVEE
+    VENDUE
+  }
+
+  class "StatutImport" as StatutImport <<enumération>> {
+    EN_COURS
+    TERMINE
+    ECHEC
+  }
+
+  class "CleChiffree" as CleChiffree <<objet-valeur>> {
+    - iv : string
+    - donnees : string
+    - tag : string
+    + dechiffrer(cleMaitre : string) : string
+  }
+
+  class "Empreinte" as Empreinte <<objet-valeur>> {
+    - valeur : string «32 octets»
+    + egale(autre : Empreinte) : bool
+  }
+}
+
+' --- Relations ---
+Editeur "1" -- "0..*" Jeu : publie >
+Plateforme "1" -- "0..*" Offre : héberge >
+Jeu "1" -- "0..*" Offre : est proposé >
+Jeu "1" *-- "1..2" JeuTraduction : dispose >
+Langue "1" -- "0..*" JeuTraduction : traduit >
+Genre "0..*" -- "0..*" Jeu : classe >
+Genre "1" *-- "1..2" GenreTraduction : dispose >
+Langue "1" -- "0..*" GenreTraduction : traduit >
+Jeu "1" -- "0..*" Pegi : classifie >
+Offre "1" -- "0..*" CleLicence : stocke >
+Offre "1" -- "0..*" ImportCles : alimente par >
+CleLicence "1" *-- "1" CleChiffree : protège >
+CleLicence "1" *-- "1" Empreinte : identifie >
+CleLicence "1" -- "1" StatutCle : état >
+ImportCles "1" -- "1" StatutImport : état >
+
+note bottom of CleLicence
+  Invariants (RG-03 et RG-04) :
+  • l'empreinte HMAC est unique dans tout le système ;
+  • une clé VENDUE est immuable (trigger PostgreSQL) ;
+  • une clé n'est déchiffrée que par LicenceService::reveler(),
+    après le Voter, et la révélation est journalisée.
+end note
+
+note bottom of Offre
+  La colonne <b>version</b> porte le verrouillage optimiste :
+  une écriture concurrente lève une OptimisticLockException
+  traduite en HTTP 409 (BX-14).
+end note
+
+@enduml

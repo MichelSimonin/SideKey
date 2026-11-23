@@ -3,7 +3,7 @@ DC = docker compose
 PHP = $(DC) exec php
 
 .DEFAULT_GOAL := help
-.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli test test-api test-front clean
+.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli test test-api test-front uml clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -63,3 +63,6 @@ test-api: ## Tests PHPUnit de l'API
 test-front: ## Tests Vitest et lint du front
 	$(DC) exec front npm test
 	$(DC) exec front npm run lint
+
+uml: ## Exporte les diagrammes PlantUML (docs/uml/exports, PNG + SVG)
+	@bash scripts/export-uml.sh

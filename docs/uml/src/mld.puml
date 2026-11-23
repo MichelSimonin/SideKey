@@ -1,0 +1,308 @@
+@startuml mld
+' ============================================================================
+' SideKey — Modèle logique relationnel (MLD)
+' Règle    : une entité devient une table ; une association (0,N)-(0,1/1,1)
+'            devient une clé étrangère du côté « plusieurs » ; une association
+'            (0,N)-(0,N) devient une table de jointure.
+' Source   : docs/cahier_des_charges_v1.2_SideKey.md §9.1 à §9.3
+' Exports  : docs/uml/exports/mld.svg et mld.png (make uml)
+' ============================================================================
+
+title MLD — SideKey\n<size:12>Modèle logique relationnel · «PK» clé primaire · «FK» clé étrangère · «UQ» unicité</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam wrapWidth 170
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam nodesep 30
+skinparam ranksep 40
+hide circle
+hide empty members
+skinparam entity {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+  HeaderBackgroundColor #E3EAF0
+}
+
+' ---------------------------------------------------------------------------
+' Référentiels
+' ---------------------------------------------------------------------------
+entity "langue" as langue {
+  * code : char(2) «PK»
+  --
+  libelle : varchar(40)
+}
+
+entity "editeur" as editeur {
+  * id : uuid «PK»
+  --
+  nom : varchar(120) «UQ»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "plateforme" as plateforme {
+  * id : uuid «PK»
+  --
+  code : varchar(12) «UQ»
+  libelle : varchar(60)
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "genre" as genre {
+  * id : uuid «PK»
+  --
+  slug : varchar(80) «UQ»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "genre_traduction" as genre_traduction {
+  * genre_id : uuid «PK / FK»
+  * langue_code : char(2) «PK / FK»
+  --
+  libelle : varchar(80)
+}
+
+entity "role" as role {
+  * code : varchar(20) «PK»
+  --
+  libelle : varchar(60)
+}
+
+' ---------------------------------------------------------------------------
+' Catalogue
+' ---------------------------------------------------------------------------
+entity "jeu" as jeu {
+  * id : uuid «PK»
+  --
+  titre : varchar(200)
+  slug : varchar(200) «UQ»
+  date_sortie : date
+  pegi : smallint
+  jaquette : varchar(255)
+  actif : boolean
+  editeur_id : uuid «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "jeu_traduction" as jeu_traduction {
+  * jeu_id : uuid «PK / FK»
+  * langue_code : char(2) «PK / FK»
+  --
+  description : text
+}
+
+entity "jeu_genre" as jeu_genre {
+  * jeu_id : uuid «PK / FK»
+  * genre_id : uuid «PK / FK»
+}
+
+entity "offre" as offre {
+  * id : uuid «PK»
+  --
+  prix_ttc : numeric(10,2)
+  seuil_alerte : smallint
+  actif : boolean
+  version : integer
+  jeu_id : uuid «FK»
+  plateforme_id : uuid «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+' ---------------------------------------------------------------------------
+' Clés de licence
+' ---------------------------------------------------------------------------
+entity "cle_licence" as cle {
+  * id : uuid «PK»
+  --
+  cle_chiffree : bytea
+  empreinte : bytea(32) «UQ»
+  statut : varchar(20)
+  importee_le : timestamptz
+  reservee_le : timestamptz
+  revelee_le : timestamptz
+  offre_id : uuid «FK»
+  ligne_commande_id : uuid «FK»
+  import_cles_id : uuid «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "import_cles" as import_cles {
+  * id : uuid «PK»
+  --
+  fichier_nom : varchar(255)
+  nb_lignes : integer
+  nb_acceptees : integer
+  nb_doublons : integer
+  nb_erreurs : integer
+  statut : varchar(20)
+  utilisateur_id : uuid «FK»
+  cree_le : timestamptz
+}
+
+' ---------------------------------------------------------------------------
+' Comptes
+' ---------------------------------------------------------------------------
+entity "utilisateur" as utilisateur {
+  * id : uuid «PK»
+  --
+  email : varchar(254) «UQ»
+  mot_de_passe_hash : varchar(255)
+  prenom : varchar(80)
+  nom : varchar(80)
+  email_verifie : boolean
+  totp_secret_chiffre : bytea
+  a2f_active : boolean
+  actif : boolean
+  derniere_connexion : timestamptz
+  anonymise_le : timestamptz
+  langue_code : char(2) «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "utilisateur_role" as utilisateur_role {
+  * utilisateur_id : uuid «PK / FK»
+  * role_code : varchar(20) «PK / FK»
+  --
+  attribue_le : timestamptz
+}
+
+entity "code_secours" as code_secours {
+  * id : uuid «PK»
+  --
+  code_hash : varchar(255)
+  utilise_le : timestamptz
+  utilisateur_id : uuid «FK»
+  cree_le : timestamptz
+}
+
+' ---------------------------------------------------------------------------
+' Commande et paiement
+' ---------------------------------------------------------------------------
+entity "commande" as commande {
+  * id : uuid «PK»
+  --
+  reference : uuid «UQ»
+  statut : varchar(30)
+  montant_total : numeric(10,2)
+  confirme_majeur : boolean
+  payee_le : timestamptz
+  expire_le : timestamptz
+  utilisateur_id : uuid «FK»
+  langue_code : char(2) «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "ligne_commande" as ligne {
+  * id : uuid «PK»
+  --
+  quantite : smallint
+  prix_unitaire : numeric(10,2)
+  commande_id : uuid «FK»
+  offre_id : uuid «FK»
+}
+
+entity "paiement" as paiement {
+  * id : uuid «PK»
+  --
+  montant : numeric(10,2)
+  statut : varchar(20)
+  cle_idempotence : varchar(64) «UQ»
+  code_retour : varchar(40)
+  derniers_chiffres : char(4)
+  commande_id : uuid «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "commande_historique" as commande_historique {
+  * id : uuid «PK»
+  --
+  ancien_statut : varchar(30)
+  nouveau_statut : varchar(30)
+  commande_id : uuid «FK»
+  auteur_id : uuid «FK»
+  cree_le : timestamptz
+}
+
+' ---------------------------------------------------------------------------
+' Contenus produits par les utilisateurs
+' ---------------------------------------------------------------------------
+entity "avis" as avis {
+  * id : uuid «PK»
+  --
+  note : smallint
+  commentaire : text
+  statut_moderation : varchar(20)
+  motif_refus : varchar(255)
+  utilisateur_id : uuid «FK»
+  jeu_id : uuid «FK»
+  langue_code : char(2) «FK»
+  cree_le : timestamptz
+  modifie_le : timestamptz
+}
+
+entity "journal_audit" as journal_audit {
+  * id : uuid «PK»
+  --
+  action : varchar(60)
+  ressource : varchar(40)
+  ressource_id : uuid
+  ip_hachee : bytea
+  utilisateur_id : uuid «FK»
+  cree_le : timestamptz
+}
+
+' ---------------------------------------------------------------------------
+' Clés étrangères
+' ---------------------------------------------------------------------------
+editeur ||--o{ jeu : editeur_id
+langue ||--o{ jeu_traduction : langue_code
+jeu ||--|{ jeu_traduction : jeu_id
+jeu ||--o{ jeu_genre : jeu_id
+genre ||--o{ jeu_genre : genre_id
+langue ||--o{ genre_traduction : langue_code
+genre ||--|{ genre_traduction : genre_id
+
+jeu ||--o{ offre : jeu_id
+plateforme ||--o{ offre : plateforme_id
+offre ||--o{ cle : offre_id
+import_cles |o--o{ cle : import_cles_id
+
+utilisateur ||--o{ import_cles : utilisateur_id
+utilisateur ||--o{ utilisateur_role : utilisateur_id
+role ||--o{ utilisateur_role : role_code
+utilisateur ||--o{ code_secours : utilisateur_id
+langue ||--o{ utilisateur : langue_code
+
+utilisateur ||--o{ commande : utilisateur_id
+langue ||--o{ commande : langue_code
+commande ||--|{ ligne : commande_id
+offre ||--o{ ligne : offre_id
+ligne |o--|{ cle : ligne_commande_id
+commande ||--o{ paiement : commande_id
+commande ||--o{ commande_historique : commande_id
+utilisateur |o--o{ commande_historique : auteur_id
+
+utilisateur ||--o{ avis : utilisateur_id
+jeu ||--o{ avis : jeu_id
+langue ||--o{ avis : langue_code
+utilisateur |o--o{ journal_audit : utilisateur_id
+
+legend right
+  «PK» clé primaire · «FK» clé étrangère · «UQ» contrainte d'unicité
+  Une table de jointure porte une clé primaire composée.
+  Les identifiants sont des <b>uuid</b> générés par la base ; la clé
+  exposée au client est <b>commande.reference</b>, jamais l'identifiant interne.
+end legend
+
+@enduml

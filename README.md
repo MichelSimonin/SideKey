@@ -14,7 +14,7 @@ SideKey/
 │   ├── config/jwt/             clés JWT générées en local (non versionnées)
 │   ├── migrations/             migrations Doctrine
 │   ├── sql/
-│   │   ├── roles/              comptes PostgreSQL sk_app, sk_admin, sk_readonly (GRANT/REVOKE)
+│   │   ├── roles/              comptes PostgreSQL sk_owner, sk_app, sk_reporting, sk_backup (GRANT/REVOKE)
 │   │   ├── functions/          procédures stockées et fonctions défensives
 │   │   ├── triggers/           triggers (historique des statuts, garde-fous)
 │   │   ├── seed/               jeu d'essai de la base de test

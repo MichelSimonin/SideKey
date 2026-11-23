@@ -1,0 +1,127 @@
+@startuml archi-couches
+' ============================================================================
+' SideKey — Architecture en couches (vue composants)
+' Notation  : diagramme de composants UML ; trois zones du CDC §8.1
+' Objet     : SPA, API Symfony (Présentation → Métier → Accès aux données)
+'             et infrastructure (proxy, SGBD, Redis, worker, PSP, SMTP)
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §8.1, §8.2, §9.4, §9.8
+' Exports   : docs/uml/exports/archi-couches.svg et archi-couches.png (make uml)
+' Remarque  : les trois paquets « API — … » forment ensemble l'API Symfony ;
+'             ils sont représentés côte à côte pour rester lisibles.
+' ============================================================================
+
+title Architecture en couches — SideKey\n<size:12>Vue composants · dépendances dans un seul sens · contrôles de sécurité (CDC §8.1, §8.2)</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+
+skinparam componentStyle uml2
+skinparam packageStyle rectangle
+skinparam nodesep 26
+skinparam ranksep 45
+skinparam wrapWidth 180
+skinparam ArrowFontSize 11
+skinparam noteBackgroundColor #FFFDE7
+skinparam noteBorderColor #90A4AE
+skinparam noteFontSize 11
+skinparam component {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+}
+skinparam database {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+}
+skinparam package {
+  BackgroundColor #FFFFFF
+  BorderColor #90A4AE
+}
+
+
+package "Client — navigateur" as zone_client {
+  component "SPA React\nVite · TypeScript" as spa
+  component "Client HTTP\njeton d'accès en mémoire" as httpclient
+}
+
+package "API — Présentation" as pres {
+  component "Contrôleurs REST\nController/Api · Controller/Admin" as ctrl
+  component "DTO + Symfony Validator\nDto/Request · Dto/Response" as dto
+  component "RateLimiter\nconnexion · paiement" as rl
+  component "Gestionnaire d'erreurs\nEventSubscriber" as err
+}
+
+package "API — Métier" as metier {
+  component "Services de domaine\nrègles §6 · transactions" as svc
+  component "Voters\nRBAC · propriété · anti-IDOR" as voter
+  component "Anti-fraude\nseuils paramétrables (RG-14)" as fraud
+  component "Journal d'audit\nAuditService" as audit
+}
+
+package "API — Accès aux données" as data {
+  component "Repositories Doctrine\nEntity · Repository" as repo
+  component "Requêtes paramétrées\nfn_* PL/pgSQL" as sql
+  component "Client Redis\nInfrastructure/Redis" as redisclient
+  component "Crypto\nAES-256-GCM · HMAC-SHA256" as crypto
+}
+
+package "Infrastructure" as infra {
+  component "Reverse proxy Caddy\nTLS · HSTS · CSP" as caddy
+  database "PostgreSQL 17\ncontraintes · triggers · rôles" as pg
+  database "Redis 8\nTTL · compteurs · cache" as redis
+  component "Worker Symfony Messenger\nimport CSV · e-mails" as worker
+  component "PSP simulé\npaiement de démonstration" as psp
+  component "SMTP / Mailpit\ncapture des e-mails" as smtp
+}
+
+spa --> httpclient
+httpclient --> caddy : HTTPS · JSON + JWT
+caddy --> pres : TLS terminé · routage
+pres --> metier : appels de services
+metier --> data : repositories · PL/pgSQL
+data --> pg : SQL paramétré
+data --> redis : panier · réservation · cache · jetons
+metier --> psp : paiement simulé (idempotent)
+metier --> worker : messages Messenger
+worker --> smtp : e-mails FR/EN
+audit ..> repo : journal_audit (immuable)
+
+note top of pres
+  **Contrôles — Présentation**
+  authentification **JWT**, **validation des DTO**
+  (Symfony Validator), RateLimiter, erreurs normalisées
+  sans fuite technique.
+end note
+
+note bottom of metier
+  **Contrôles — Métier**
+  **Voters** (RBAC, propriété, anti-IDOR), frontières
+  **transactionnelles**, anti-fraude paramétrable,
+  audit des actions sensibles.
+end note
+
+note top of data
+  **Contrôles — Accès aux données**
+  **requêtes paramétrées** (Doctrine, `fn_*`),
+  compte `sk_app` à moindre privilège, **chiffrement**
+  AES-256-GCM et empreinte HMAC des clés.
+end note
+
+note bottom of httpclient
+  Jeton d'accès **en mémoire** uniquement : rien de sensible
+  dans `localStorage`, aucun secret côté client ; i18n FR/EN
+  et composants accessibles (RGAA 4).
+end note
+
+legend right
+  **Sens unique des dépendances** : Présentation → Métier → Accès aux données.
+  Une couche ne remonte jamais vers la précédente : la présentation ne porte
+  aucune règle métier, le métier n'ouvre aucune connexion SQL, l'accès aux
+  données n'appelle ni Voter ni contrôleur (CDC §8.1, §8.2).
+  Les trois paquets « API — … » forment l'API REST Symfony.
+end legend
+
+@enduml
