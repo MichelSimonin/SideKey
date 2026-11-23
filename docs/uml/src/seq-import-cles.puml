@@ -1,0 +1,109 @@
+@startuml seq-import-cles
+' ============================================================================
+' SideKey — Séquence : import de clés en CSV par un gestionnaire (écran E13)
+' Scénario  : POST /api/admin/cles/import — RBAC + A2F, validation du fichier,
+'             empreinte HMAC, chiffrement AES-256-GCM, rapport d'import
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §5.6, §9.4, §10.3, §11.5
+' Exports   : docs/uml/exports/seq-import-cles.svg et seq-import-cles.png
+' ============================================================================
+autonumber
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam wrapWidth 760
+skinparam maxMessageSize 380
+skinparam sequence {
+  ArrowColor #455A64
+  ArrowFontColor #37474F
+  ParticipantBorderColor #37474F
+  ParticipantBackgroundColor #F7F9FB
+  LifeLineBorderColor #455A64
+  GroupBorderColor #37474F
+  GroupHeaderFontColor #1565C0
+  NoteBorderColor #37474F
+  DividerBackgroundColor #E3EAF0
+}
+participant "Gestionnaire" as Gest <<SPA · E13>>
+participant "ImportClesController" as Ctrl <<Controller/Admin>>
+participant "ImportClesRequest" as Dto <<Dto/Request>>
+participant "Validator" as Validator <<Symfony>>
+participant "ImportClesService" as Svc <<Service>>
+participant "ParseurCsv" as Csv <<Service>>
+participant "CleChiffrementService" as Crypto <<Service>>
+participant "CleLicenceRepository" as Repo <<Repository>>
+participant "ImportCles" as Rapport <<Entity · rapport>>
+database "base PostgreSQL" as PG
+== Import — POST /api/admin/cles/import ==
+Gest -> Ctrl : POST /api/admin/cles/import (multipart : fichier CSV + offre_id)
+activate Ctrl
+Ctrl -> Ctrl : contrôle RBAC (GESTIONNAIRE | ADMIN) puis A2F active
+alt Rôle absent ou A2F inactive
+  Ctrl --> Gest : 403 Forbidden { « Accès refusé » }
+  note over Ctrl : aucun octet du fichier n'est lu avant ce contrôle.
+else Autorisé
+  Ctrl -> Dto : hydrater(fichier, offre_id)
+  Ctrl -> Validator : validate(ImportClesRequest)
+  activate Validator
+  Validator --> Ctrl : violations | valide
+  deactivate Validator
+  alt Fichier invalide
+    Ctrl --> Gest : 422 Unprocessable Entity { erreurs de validation }
+    note over Ctrl : taille, type MIME réel (finfo), en-tête attendu et 1 000 lignes maximum, avant lecture.
+  else Fichier valide
+    Ctrl -> Svc : importer(fichier, offre_id, gestionnaire)
+    activate Svc
+    Svc -> Repo : getOffre(offre_id)
+    Repo -> PG : SELECT … FROM offre WHERE id = :offre_id
+    PG --> Repo : offre | null
+    Repo --> Svc : offre | null
+    alt Offre inconnue
+      Svc --> Ctrl : OffreInconnueException
+      Ctrl --> Gest : 404 Not Found { « Offre inconnue » }
+    else Offre existante
+      ' Lecture, normalisation et chiffrement hors transaction : les verrous ne sont tenus que par l'INSERT du lot.
+      Svc -> Csv : parcourir(fichier)
+      activate Csv
+      loop Chaque ligne (lecture en flux, mémoire constante)
+        Csv -> Csv : normaliser la clé puis valider le format
+        Csv --> Svc : cle_normalisee | ligne rejetée
+        alt Ligne mal formée
+          Svc -> Svc : nb_erreurs++, ligne ignorée
+        else Ligne exploitable
+          Svc -> Crypto : empreinte HMAC-SHA256 puis chiffrement AES-256-GCM
+          Crypto --> Svc : empreinte 32 o, cle_chiffree (IV + tag)
+          Svc -> Repo : existeParEmpreinte(empreinte)
+          Repo -> PG : SELECT 1 FROM cle_licence WHERE empreinte = :empreinte
+          PG --> Repo : présente | absente
+          Repo --> Svc : présente | absente
+          alt Doublon (déjà vu dans le fichier ou en base)
+            Svc -> Svc : nb_doublons++, ligne ignorée
+            note over Svc : rejet ligne à ligne : le lot continue, aucune erreur globale.
+            ' Réimporter le même fichier est sans effet : les empreintes déjà présentes partent en doublons (idempotence).
+          else Clé nouvelle
+            Svc -> Repo : ajouter(cle_chiffree, empreinte, offre_id)
+            Repo -> PG : INSERT INTO cle_licence (…) — lot de 500
+            ' Un lot = une transaction READ COMMITTED ; commit après 500 INSERT, puis lot suivant.
+            Svc -> Svc : nb_acceptees++
+          end
+        end
+      end
+      deactivate Csv
+      Svc -> Repo : flush() — dernier lot
+      Svc -> Rapport : creer(nb_lignes, nb_acceptees, nb_doublons, nb_erreurs, TERMINE)
+      Svc -> Repo : enregistrerRapport(rapport)
+      Repo -> PG : INSERT INTO import_cles (…)
+      ' Le rapport est écrit après le dernier lot : un import interrompu garde une trace (EN_COURS puis ECHEC).
+      Svc --> Ctrl : rapport ImportCles
+      deactivate Svc
+      Ctrl --> Gest : 201 Created { rapport }
+      note over Ctrl : réponse sans aucune clé : ni en clair, ni chiffrée.
+    end
+  end
+end
+deactivate Ctrl
+note over Gest, PG
+  <b>Aucune clé en clair ne sort de la base ni ne figure dans les logs</b> : la clé est chiffrée
+  AES-256-GCM avant l'INSERT, seuls l'empreinte HMAC-SHA256 et les compteurs du rapport sont écrits.
+  <b>Au-delà de 1 000 lignes</b> : traitement asynchrone Messenger en v2 (P-13) ; en v1, l'import
+  synchrone est borné à 1 000 lignes et rejette le fichier au-delà (422).
+end note
+@enduml

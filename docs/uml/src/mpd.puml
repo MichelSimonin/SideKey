@@ -1,0 +1,330 @@
+@startuml mpd
+' ============================================================================
+' SideKey — Modèle physique de données (MPD) PostgreSQL 17
+' Règle    : types PostgreSQL, valeurs par défaut, contraintes et index.
+'            Le détail des CHECK, index, triggers et rôles SGBD est commenté
+'            dans docs/architecture/modele-donnees.md (§4 à §6).
+' Source   : docs/cahier_des_charges_v1.2_SideKey.md §9.1 à §9.6
+' Exports  : docs/uml/exports/mpd.svg et mpd.png (make uml)
+' ============================================================================
+
+title MPD — SideKey (PostgreSQL 17)\n<size:12>Types · valeurs par défaut · «PK» «FK» «UQ» «CK» · index partiels</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 10
+skinparam wrapWidth 170
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam nodesep 26
+skinparam ranksep 36
+hide circle
+hide empty members
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #37474F
+  HeaderBackgroundColor #ECEFF1
+}
+
+' ---------------------------------------------------------------------------
+' Référentiels et catalogue
+' ---------------------------------------------------------------------------
+package "Référentiels et catalogue" {
+  entity "langue" as langue {
+    * code : char(2) «PK»
+    --
+    * libelle : varchar(40)
+  }
+
+  entity "editeur" as editeur {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * nom : varchar(120) «UQ»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "plateforme" as plateforme {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * code : varchar(12) «UQ» «CK ^[A-Z0-9_]+$»
+    * libelle : varchar(60)
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "genre" as genre {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * slug : varchar(80) «UQ»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "genre_traduction" as genre_traduction {
+    * genre_id : uuid «PK / FK»
+    * langue_code : char(2) «PK / FK»
+    --
+    * libelle : varchar(80)
+  }
+
+  entity "role" as role {
+    * code : varchar(20) «PK» «CK CLIENT|GESTIONNAIRE|MODERATEUR|ADMIN»
+    --
+    * libelle : varchar(60)
+  }
+
+  entity "jeu" as jeu {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * titre : varchar(200)
+    * slug : varchar(200) «UQ»
+    date_sortie : date
+    * pegi : smallint «CK IN (3,7,12,16,18)»
+    jaquette : varchar(255)
+    * actif : boolean = true
+    * editeur_id : uuid «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "jeu_traduction" as jeu_traduction {
+    * jeu_id : uuid «PK / FK»
+    * langue_code : char(2) «PK / FK»
+    --
+    * description : text «CK 10..4000»
+  }
+
+  entity "jeu_genre" as jeu_genre {
+    * jeu_id : uuid «PK / FK»
+    * genre_id : uuid «PK / FK»
+  }
+
+  entity "offre" as offre {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * prix_ttc : numeric(10,2) «CK > 0»
+    * seuil_alerte : smallint = 5 «CK >= 0»
+    * actif : boolean = true
+    * version : integer = 1 «verrou optimiste»
+    * jeu_id : uuid «FK»
+    * plateforme_id : uuid «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+}
+
+' ---------------------------------------------------------------------------
+' Clés de licence
+' ---------------------------------------------------------------------------
+package "Clés de licence" {
+  entity "import_cles" as import_cles {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * fichier_nom : varchar(255)
+    * nb_lignes : integer = 0
+    * nb_acceptees : integer = 0
+    * nb_doublons : integer = 0
+    * nb_erreurs : integer = 0
+    * statut : varchar(20) «CK EN_COURS|TERMINE|ECHEC»
+    * utilisateur_id : uuid «FK»
+    * cree_le : timestamptz = now()
+  }
+
+  entity "cle_licence" as cle {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * cle_chiffree : bytea «AES-256-GCM»
+    * empreinte : bytea «UQ, HMAC-SHA256»
+    * statut : varchar(20) = 'DISPONIBLE' «CK»
+    * importee_le : timestamptz = now()
+    reservee_le : timestamptz
+    revelee_le : timestamptz
+    * offre_id : uuid «FK»
+    ligne_commande_id : uuid «FK»
+    import_cles_id : uuid «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+}
+
+' ---------------------------------------------------------------------------
+' Comptes
+' ---------------------------------------------------------------------------
+package "Comptes" {
+  entity "utilisateur" as utilisateur {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * email : varchar(254) «UQ index lower(email)»
+    * mot_de_passe_hash : varchar(255)
+    * prenom : varchar(80)
+    * nom : varchar(80)
+    * email_verifie : boolean = false
+    totp_secret_chiffre : bytea
+    * a2f_active : boolean = false «CK secret requis»
+    * actif : boolean = true
+    derniere_connexion : timestamptz
+    anonymise_le : timestamptz
+    * langue_code : char(2) = 'fr' «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "utilisateur_role" as utilisateur_role {
+    * utilisateur_id : uuid «PK / FK»
+    * role_code : varchar(20) «PK / FK»
+    --
+    * attribue_le : timestamptz = now()
+  }
+
+  entity "code_secours" as code_secours {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * code_hash : varchar(255)
+    utilise_le : timestamptz
+    * utilisateur_id : uuid «FK»
+    * cree_le : timestamptz = now()
+  }
+}
+
+' ---------------------------------------------------------------------------
+' Commande, paiement et contenus
+' ---------------------------------------------------------------------------
+package "Commande, paiement et contenus" {
+  entity "commande" as commande {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * reference : uuid «UQ» = gen_random_uuid()
+    * statut : varchar(30) «CK 6 statuts»
+    * montant_total : numeric(10,2) «CK >= 0»
+    * confirme_majeur : boolean = false
+    payee_le : timestamptz
+    * expire_le : timestamptz
+    * utilisateur_id : uuid «FK»
+    * langue_code : char(2) «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "ligne_commande" as ligne {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * quantite : smallint «CK 1..10»
+    * prix_unitaire : numeric(10,2) «CK > 0»
+    * commande_id : uuid «FK»
+    * offre_id : uuid «FK»
+    «UQ (commande_id, offre_id)»
+  }
+
+  entity "paiement" as paiement {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * montant : numeric(10,2) «CK > 0»
+    * statut : varchar(20) «CK EN_ATTENTE|ACCEPTE|REFUSE|ERREUR»
+    * cle_idempotence : varchar(64) «UQ»
+    code_retour : varchar(40)
+    derniers_chiffres : char(4) «CK ^[0-9]{4}$»
+    * commande_id : uuid «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+  }
+
+  entity "commande_historique" as commande_historique {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    ancien_statut : varchar(30)
+    * nouveau_statut : varchar(30)
+    * commande_id : uuid «FK»
+    auteur_id : uuid «FK»
+    * cree_le : timestamptz = now()
+  }
+
+  entity "avis" as avis {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * note : smallint «CK 1..5»
+    * commentaire : text «CK 10..1000»
+    * statut_moderation : varchar(20) = 'EN_ATTENTE' «CK»
+    motif_refus : varchar(255) «CK si REFUSE»
+    * utilisateur_id : uuid «FK»
+    * jeu_id : uuid «FK»
+    * langue_code : char(2) «FK»
+    * cree_le : timestamptz = now()
+    modifie_le : timestamptz
+    «UQ (utilisateur_id, jeu_id)»
+  }
+
+  entity "journal_audit" as journal_audit {
+    * id : uuid «PK» = gen_random_uuid()
+    --
+    * action : varchar(60)
+    * ressource : varchar(40)
+    ressource_id : uuid
+    ip_hachee : bytea «HMAC»
+    utilisateur_id : uuid «FK»
+    * cree_le : timestamptz = now()
+  }
+}
+
+' ---------------------------------------------------------------------------
+' Clés étrangères
+' ---------------------------------------------------------------------------
+editeur ||--o{ jeu : fk_jeu_editeur
+langue ||--o{ jeu_traduction : fk_jt_langue
+jeu ||--|{ jeu_traduction : fk_jt_jeu
+jeu ||--o{ jeu_genre : fk_jg_jeu
+genre ||--o{ jeu_genre : fk_jg_genre
+langue ||--o{ genre_traduction : fk_gt_langue
+genre ||--|{ genre_traduction : fk_gt_genre
+jeu ||--o{ offre : fk_offre_jeu
+plateforme ||--o{ offre : fk_offre_plateforme
+offre ||--o{ cle : fk_cle_offre
+import_cles |o--o{ cle : fk_cle_import
+utilisateur ||--o{ import_cles : fk_import_utilisateur
+utilisateur ||--o{ utilisateur_role : fk_ur_utilisateur
+role ||--o{ utilisateur_role : fk_ur_role
+utilisateur ||--o{ code_secours : fk_code_utilisateur
+langue ||--o{ utilisateur : fk_utilisateur_langue
+utilisateur ||--o{ commande : fk_commande_utilisateur
+langue ||--o{ commande : fk_commande_langue
+commande ||--|{ ligne : fk_ligne_commande
+offre ||--o{ ligne : fk_ligne_offre
+ligne |o--|{ cle : fk_cle_ligne
+commande ||--o{ paiement : fk_paiement_commande
+commande ||--o{ commande_historique : fk_hist_commande
+utilisateur |o--o{ commande_historique : fk_hist_auteur
+utilisateur ||--o{ avis : fk_avis_utilisateur
+jeu ||--o{ avis : fk_avis_jeu
+langue ||--o{ avis : fk_avis_langue
+utilisateur |o--o{ journal_audit : fk_audit_utilisateur
+
+' ---------------------------------------------------------------------------
+' Objets physiques complémentaires (index, triggers, fonctions, rôles)
+' ---------------------------------------------------------------------------
+legend right
+  == Contraintes et index notables ==
+  <b>uq_offre_active</b> : UNIQUE (jeu_id, plateforme_id) WHERE actif
+  <b>ix_cle_stock</b> : (offre_id, importee_le) WHERE statut = 'DISPONIBLE'
+  <b>uq_utilisateur_email</b> : UNIQUE (lower(email))
+  <b>ck_cle_statut</b> : statut IN ('DISPONIBLE','RESERVEE','VENDUE')
+  <b>ck_cle_vendue_ligne</b> : statut <> 'VENDUE' OR ligne_commande_id IS NOT NULL
+  <b>ck_commande_expire</b> : expire_le > cree_le
+  <b>ck_offre_version</b> : version >= 1
+
+  == Triggers (migrations Doctrine, SQL brut) ==
+  <b>trg_commande_historique</b> : historise chaque changement de statut
+  <b>trg_commande_transition</b> : refuse une transition non prévue (§6.4)
+  <b>trg_cle_licence_protection</b> : interdit UPDATE/DELETE d'une clé VENDUE
+  <b>trg_journal_audit_immuable</b> : interdit UPDATE et DELETE
+
+  == Fonctions PL/pgSQL ==
+  <b>fn_reserver_cles</b>, <b>fn_valider_commande</b>,
+  <b>fn_liberer_reservations_expirees</b> (Scheduler, 1 min)
+
+  == Rôles PostgreSQL (§9.5) ==
+  <b>sk_owner</b> (DDL, migrations) · <b>sk_app</b> (DML, sans DELETE sur
+  cle_licence, commande, paiement, journal_audit) · <b>sk_reporting</b>
+  (SELECT sur vues) · <b>sk_backup</b> (pg_read_all_data)
+end legend
+
+@enduml

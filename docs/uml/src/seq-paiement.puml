@@ -1,0 +1,108 @@
+@startuml seq-paiement
+' ============================================================================
+' SideKey — Séquence : paiement simulé et validation de la commande
+' Objet    : paiement d'une commande par carte fictive, idempotence, refus,
+'            anti-fraude « Équilibré » et validation atomique des clés.
+' Source   : docs/cahier_des_charges_v1.2_SideKey.md §5.4, §6.2, §6.3,
+'            §6.4, §10.3, §11.6
+' Exports  : docs/uml/exports/seq-paiement.svg et .png (make uml)
+' ============================================================================
+
+title Séquence — paiement simulé et validation de la commande\n<size:12>Hors transaction pendant l'appel au PSP · idempotence · anti-fraude « Équilibré »</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam sequence {
+  ArrowColor #455A64
+  ActorBorderColor #37474F
+  ActorBackgroundColor #F7F9FB
+  LifeLineBorderColor #90A4AE
+  ParticipantBorderColor #37474F
+  ParticipantBackgroundColor #F7F9FB
+  DividerBackgroundColor #ECEFF1
+}
+
+autonumber "<b>00"
+participant "Client" as C
+participant "API\nPaiementController" as API
+participant "PaiementService" as PAY
+participant "AntiFraudeService" as FRAUD
+participant "PspSimule\n(Strategy)" as PSP
+database "PostgreSQL 17" as PG
+participant "Redis" as R
+participant "Messenger\n(e-mail FR/EN)" as MQ
+
+C -> API : POST /api/paiements\n{ reference, carte fictive, cleIdempotence }
+activate API
+API -> API : jeton JWT, rôle CLIENT,\nDTO validé (format, longueur)
+API -> PAY : payer(reference, carte, cleIdempotence)
+activate PAY
+
+PAY -> R : GET idem:{cleIdempotence}
+alt clé d'idempotence déjà utilisée
+  R --> PAY : réponse enregistrée
+  PAY --> API : paiement déjà traité
+  API --> C : <b>200</b> — même réponse qu'au premier appel\n(aucun second débit)
+else première tentative
+  PAY -> PG : SELECT commande (statut = EN_ATTENTE_PAIEMENT,\nexpire_le > now())
+  alt commande expirée ou déjà payée
+    PAY --> API : CommandeNonPayableException
+    API --> C : <b>409</b> — commande expirée ou déjà réglée
+  else commande payable
+    PAY -> FRAUD : verifier(utilisateur, montant, panier)
+    activate FRAUD
+    FRAUD -> R : GET fraud:keys24h:{userId}\nGET fraud:payfail:{userId}
+    FRAUD --> PAY : autorisé / bloqué 1 h (3 échecs)
+    deactivate FRAUD
+    PAY -> PG : INSERT paiement (montant, EN_ATTENTE,\ncle_idempotence, derniers_chiffres)
+    PAY -> PSP : autoriser(montant, carte)
+    activate PSP
+    note right of PSP : Appel <b>hors transaction</b> (CDC §10.3) :\naucun verrou PostgreSQL n'est tenu\npendant l'appel au prestataire.
+    alt 4242 4242 4242 4242 — autorisé
+      PSP --> PAY : ACCEPTE (code 00)
+      deactivate PSP
+      alt règle anti-fraude déclenchée (compte < 24 h et montant > 150 €,\nou première commande > 200 €)
+        PAY -> PG : UPDATE commande SET statut = 'A_VERIFIER'
+        note right of PG : Les clés restent RESERVEE :\nelles ne sont pas révélables\net ne sont pas vendues.
+        PAY -> PG : UPDATE paiement SET statut = 'ACCEPTE', code_retour = '00'
+        PAY -> R : SETEX idem:{cleIdempotence} 24h (réponse)
+        PAY -> MQ : CommandeAVerifierMessage (file « à vérifier »)
+        PAY --> API : commande A_VERIFIER
+        API --> C : <b>200</b> — commande en cours de vérification\n(le client ne reçoit aucun détail technique)
+      else commande normale
+        PAY -> PG : BEGIN
+        PAY -> PG : SELECT fn_valider_commande(commande)
+        activate PG
+        PG -> PG : vérifie statut = EN_ATTENTE_PAIEMENT\net expire_le > now()
+        PG -> PG : UPDATE cle_licence SET statut = 'VENDUE'
+        PG -> PG : UPDATE commande SET statut = 'PAYEE', payee_le = now()
+        PG --> PAY : commande PAYEE
+        deactivate PG
+        PAY -> PG : UPDATE paiement SET statut = 'ACCEPTE', code_retour = '00'
+        PAY -> PG : COMMIT
+        PAY -> R : SETEX idem:{cleIdempotence} 24h (réponse)\nDEL resa:{commandeId}
+        PAY -> MQ : CommandePayeeMessage (e-mail dans la langue du client)
+        PAY --> API : commande PAYEE
+        API --> C : <b>200</b> — confirmation, clés dans « Mes commandes »
+      end
+    else 4000 0000 0000 0002 — refusé
+      PSP --> PAY : REFUSE (code 51)
+      deactivate PSP
+      PAY -> PG : UPDATE paiement SET statut = 'REFUSE', code_retour = '51'
+      PAY -> R : INCR fraud:payfail:{userId} EX 1h
+      note right of R : 3 échecs → clé rl:pay:{userId}\nbloquée 1 heure (CDC §6.3).
+      PAY --> API : PaiementRefuseException
+      API --> C : <b>402</b> — paiement refusé, réservation conservée\njusqu'à la fin du TTL de 15 min (US-36)
+    end
+  end
+end
+deactivate PAY
+deactivate API
+
+note over C, MQ : La clé n'est déchiffrée qu'à la révélation par son propriétaire\n(voir seq-revelation-cle) ; aucune donnée de carte n'est stockée,\nseuls le code retour et les 4 derniers chiffres sont conservés.
+
+@enduml

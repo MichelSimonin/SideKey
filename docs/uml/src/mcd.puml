@@ -1,0 +1,282 @@
+@startuml mcd
+' ============================================================================
+' SideKey — Modèle conceptuel de données (MCD)
+' Notation  : entité-association (Crow's Foot) + cardinalités Merise (min,max)
+' Domaine   : conceptuel — aucun identifiant technique, aucune clé étrangère
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §9.2 à §9.5
+' Exports   : docs/uml/exports/mcd.svg et mcd.png (make uml)
+' ============================================================================
+
+title MCD — SideKey\n<size:12>Entité-association · cardinalités (min,max) · domaines conceptuels</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam wrapWidth 180
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam ArrowFontSize 11
+skinparam nodesep 38
+skinparam ranksep 45
+hide circle
+hide empty members
+skinparam entity {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+  HeaderBackgroundColor #E3EAF0
+}
+
+' ---------------------------------------------------------------------------
+' Référentiels
+' ---------------------------------------------------------------------------
+entity "LANGUE" as langue {
+  * code : code(2)
+  --
+  libelle : chaîne(40)
+}
+
+entity "EDITEUR" as editeur {
+  * id : identifiant
+  --
+  nom : chaîne(120) «unique»
+  cree_le, modifie_le : horodatage
+}
+
+entity "PLATEFORME" as plateforme {
+  * id : identifiant
+  --
+  code : chaîne(12) «unique»
+    «STEAM, PSN, XBOX, ESHOP»
+  libelle : chaîne(60)
+  cree_le, modifie_le : horodatage
+}
+
+entity "GENRE" as genre {
+  * id : identifiant
+  --
+  slug : chaîne(80) «unique»
+  cree_le, modifie_le : horodatage
+}
+
+entity "GENRE_TRADUCTION" as genre_traduction {
+  * genre : GENRE
+  * langue : LANGUE
+  --
+  libelle : chaîne(80)
+}
+
+entity "ROLE" as role {
+  * code : code(20)
+  --
+  libelle : chaîne(60)
+    «CLIENT, GESTIONNAIRE,
+     MODERATEUR, ADMIN»
+}
+
+' ---------------------------------------------------------------------------
+' Catalogue
+' ---------------------------------------------------------------------------
+entity "JEU" as jeu {
+  * id : identifiant
+  --
+  titre : chaîne(200)
+  slug : chaîne(200) «unique»
+  date_sortie : date
+  pegi : entier «3, 7, 12, 16, 18»
+  jaquette : chaîne(255)
+  actif : booléen
+  cree_le, modifie_le : horodatage
+}
+
+entity "JEU_TRADUCTION" as jeu_traduction {
+  * jeu : JEU
+  * langue : LANGUE
+  --
+  description : texte(10..4000)
+}
+
+entity "OFFRE" as offre {
+  * id : identifiant
+  --
+  prix_ttc : montant
+  seuil_alerte : entier
+  actif : booléen
+  version : entier «verrou optimiste»
+  cree_le, modifie_le : horodatage
+  «unique actif : (jeu, plateforme)»
+}
+
+' ---------------------------------------------------------------------------
+' Clés de licence
+' ---------------------------------------------------------------------------
+entity "CLE_LICENCE" as cle {
+  * id : identifiant
+  --
+  cle_chiffree : binaire «AES-256-GCM»
+  empreinte : binaire(32) «unique, HMAC-SHA256»
+  statut : énumération
+    «DISPONIBLE, RESERVEE, VENDUE»
+  importee_le : horodatage
+  reservee_le : horodatage
+  revelee_le : horodatage
+  cree_le, modifie_le : horodatage
+}
+
+entity "IMPORT_CLES" as import_cles {
+  * id : identifiant
+  --
+  fichier_nom : chaîne(255)
+  nb_lignes : entier
+  nb_acceptees : entier
+  nb_doublons : entier
+  nb_erreurs : entier
+  statut : énumération
+    «EN_COURS, TERMINE, ECHEC»
+  cree_le : horodatage
+}
+
+' ---------------------------------------------------------------------------
+' Comptes
+' ---------------------------------------------------------------------------
+entity "UTILISATEUR" as utilisateur {
+  * id : identifiant
+  --
+  email : chaîne(254) «unique, insensible à la casse»
+  mot_de_passe_hash : chaîne(255) «argon2id»
+  prenom, nom : chaîne(80)
+  email_verifie : booléen
+  totp_secret_chiffre : binaire «AES-256-GCM»
+  a2f_active : booléen
+  actif : booléen
+  derniere_connexion : horodatage
+  anonymise_le : horodatage «RGPD»
+  cree_le, modifie_le : horodatage
+}
+
+entity "UTILISATEUR_ROLE" as utilisateur_role {
+  * utilisateur : UTILISATEUR
+  * role : ROLE
+  --
+  attribue_le : horodatage
+}
+
+entity "CODE_SECOURS" as code_secours {
+  * id : identifiant
+  --
+  code_hash : chaîne(255) «argon2id»
+  utilise_le : horodatage
+  cree_le : horodatage
+}
+
+' ---------------------------------------------------------------------------
+' Commande et paiement
+' ---------------------------------------------------------------------------
+entity "COMMANDE" as commande {
+  * id : identifiant
+  --
+  reference : identifiant «unique, exposée»
+  statut : énumération
+    «EN_ATTENTE_PAIEMENT, A_VERIFIER, PAYEE,
+     EXPIREE, ANNULEE, REMBOURSEE»
+  montant_total : montant «calculé serveur»
+  confirme_majeur : booléen «PEGI 18»
+  expire_le : horodatage «TTL 15 min»
+  payee_le : horodatage
+  cree_le, modifie_le : horodatage
+}
+
+entity "LIGNE_COMMANDE" as ligne {
+  * id : identifiant
+  --
+  quantite : entier(1..10)
+  prix_unitaire : montant «prix figé à l'achat»
+}
+
+entity "PAIEMENT" as paiement {
+  * id : identifiant
+  --
+  montant : montant
+  statut : énumération
+    «EN_ATTENTE, ACCEPTE, REFUSE, ERREUR»
+  cle_idempotence : chaîne(64) «unique»
+  code_retour : chaîne(40)
+  derniers_chiffres : code(4)
+  cree_le, modifie_le : horodatage
+}
+
+entity "COMMANDE_HISTORIQUE" as commande_historique {
+  * id : identifiant
+  --
+  ancien_statut : énumération
+  nouveau_statut : énumération
+  cree_le : horodatage «posé par trigger»
+}
+
+' ---------------------------------------------------------------------------
+' Contenus produits par les utilisateurs
+' ---------------------------------------------------------------------------
+entity "AVIS" as avis {
+  * id : identifiant
+  --
+  note : entier(1..5)
+  commentaire : texte(10..1000) «sans HTML»
+  statut_moderation : énumération
+    «EN_ATTENTE, PUBLIE, REFUSE»
+  motif_refus : chaîne(255) «requis si REFUSE»
+  cree_le, modifie_le : horodatage
+}
+
+entity "JOURNAL_AUDIT" as journal_audit {
+  * id : identifiant
+  --
+  action : chaîne(60)
+  ressource : chaîne(40)
+  ressource_id : identifiant
+  ip_hachee : binaire «HMAC»
+  cree_le : horodatage «immuable»
+}
+
+' ---------------------------------------------------------------------------
+' Associations
+' ---------------------------------------------------------------------------
+' Lecture : entité «une» ||--o{ entité «plusieurs» — le libellé de gauche
+' donne le nombre d'entités de gauche pour une entité de droite, et inversement.
+editeur "(1,1)" ||--o{ "(0,N)" jeu : publier
+jeu "(1,1)" ||--|{ "(1,2)" jeu_traduction : disposer
+langue "(1,1)" ||--o{ "(0,N)" jeu_traduction : traduire
+jeu "(0,N)" }o--o{ "(0,N)" genre : classer
+genre "(1,1)" ||--|{ "(1,2)" genre_traduction : disposer
+langue "(1,1)" ||--o{ "(0,N)" genre_traduction : traduire
+
+jeu "(1,1)" ||--o{ "(0,N)" offre : être proposé
+plateforme "(1,1)" ||--o{ "(0,N)" offre : héberger
+offre "(1,1)" ||--o{ "(0,N)" cle : stocker
+import_cles "(0,1)" |o--o{ "(0,N)" cle : fournir
+utilisateur "(1,1)" ||--o{ "(0,N)" import_cles : réaliser
+
+utilisateur "(1,1)" ||--o{ "(0,N)" utilisateur_role : porter
+role "(1,1)" ||--o{ "(0,N)" utilisateur_role : définir
+utilisateur "(1,1)" ||--o{ "(0,N)" code_secours : protéger
+
+utilisateur "(1,1)" ||--o{ "(0,N)" commande : passer
+commande "(1,1)" ||--|{ "(1,N)" ligne : contenir
+offre "(1,1)" ||--o{ "(0,N)" ligne : être commandée
+ligne "(1,1)" |o--|{ "(0,1)" cle : attribuer
+commande "(1,1)" ||--o{ "(0,N)" paiement : être réglée
+commande "(1,1)" ||--o{ "(0,N)" commande_historique : historiser
+langue "(1,1)" ||--o{ "(0,N)" commande : libeller en
+langue "(1,1)" ||--o{ "(0,N)" utilisateur : préférer
+
+utilisateur "(1,1)" ||--o{ "(0,N)" avis : rédiger
+jeu "(1,1)" ||--o{ "(0,N)" avis : recevoir
+langue "(1,1)" ||--o{ "(0,N)" avis : rédiger en
+utilisateur "(0,1)" |o--o{ "(0,N)" journal_audit : être l'auteur
+
+legend right
+  <b>Cardinalités Merise</b> : (min,max) de l'entité dans l'association.
+  Une clé est unique dans tout le système (empreinte HMAC) ; elle passe
+  de DISPONIBLE à RESERVEE puis VENDUE, et n'est rattachée qu'à une ligne.
+  Les identifiants techniques (uuid) apparaissent au MLD, pas au MCD.
+end legend
+
+@enduml

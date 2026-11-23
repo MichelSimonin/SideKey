@@ -1,0 +1,192 @@
+@startuml classes-commande
+' ============================================================================
+' SideKey — Diagramme de classes : comptes, commandes et contenus
+' Objet    : modèle de domaine de la couche métier (entités Doctrine,
+'            énumérations, objets-valeurs) et relations.
+' Source   : docs/cahier_des_charges_v1.2_SideKey.md §5.3, §5.5, §6.2, §6.4
+' Exports  : docs/uml/exports/classes-commande.svg et .png (make uml)
+' ============================================================================
+
+title Classes — comptes, commandes et contenus\n<size:12>Entités Doctrine, énumérations et objets-valeurs (namespace Api\\Entity)</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam ClassBackgroundColor #F7F9FB
+skinparam ClassBorderColor #37474F
+skinparam ClassHeaderBackgroundColor #E3EAF0
+
+hide circle
+hide empty members
+
+package "Comptes" #FFFFFF {
+  class "Utilisateur" as Utilisateur <<entity>> {
+    - id : Uuid
+    - email : string
+    - motDePasseHash : string «argon2id»
+    - prenom, nom : string
+    - emailVerifie : bool
+    - totpSecretChiffre : ?CleChiffree
+    - a2fActive : bool
+    - actif : bool
+    - derniereConnexion : ?DateTimeImmutable
+    - anonymiseLe : ?DateTimeImmutable
+    + aRole(role : Role) : bool
+    + a2fActive() : bool
+    + anonymiser() : void
+  }
+
+  class "Role" as Role <<enumération>> {
+    CLIENT
+    GESTIONNAIRE
+    MODERATEUR
+    ADMIN
+    + estBackOffice() : bool
+  }
+
+  class "CodeSecours" as CodeSecours <<entity>> {
+    - id : Uuid
+    - codeHash : string
+    - utiliseLe : ?DateTimeImmutable
+    + estUtilise() : bool
+  }
+}
+
+package "Commande et paiement" #FFFFFF {
+  class "Commande" as Commande <<entity>> {
+    - id : Uuid
+    - reference : ReferenceCommande «exposée»
+    - statut : StatutCommande
+    - montantTotal : decimal
+    - confirmeMajeur : bool
+    - payeeLe : ?DateTimeImmutable
+    - expireLe : DateTimeImmutable
+    - creeLe : DateTimeImmutable
+    + ajouterLigne(ligne : LigneCommande) : void
+    + recalculerTotal() : void
+    + estExpiree() : bool
+    + peutEtrePayee() : bool
+  }
+
+  class "LigneCommande" as LigneCommande <<entity>> {
+    - id : Uuid
+    - quantite : int «1..10»
+    - prixUnitaire : decimal «figé à l'achat»
+  }
+
+  class "Paiement" as Paiement <<entity>> {
+    - id : Uuid
+    - montant : decimal
+    - statut : StatutPaiement
+    - cleIdempotence : string «unique»
+    - codeRetour : ?string
+    - derniersChiffres : ?string «4»
+    + estAccepte() : bool
+  }
+
+  class "CommandeHistorique" as CommandeHistorique <<entity>> {
+    - id : Uuid
+    - ancienStatut : ?StatutCommande
+    - nouveauStatut : StatutCommande
+    - creeLe : DateTimeImmutable
+  }
+
+  class "StatutCommande" as StatutCommande <<enumération>> {
+    EN_ATTENTE_PAIEMENT
+    A_VERIFIER
+    PAYEE
+    EXPIREE
+    ANNULEE
+    REMBOURSEE
+    + peutTransitionnerVers(cible : StatutCommande) : bool
+  }
+
+  class "StatutPaiement" as StatutPaiement <<enumération>> {
+    EN_ATTENTE
+    ACCEPTE
+    REFUSE
+    ERREUR
+  }
+
+  class "ReferenceCommande" as ReferenceCommande <<objet-valeur>> {
+    - valeur : Uuid
+    + depuis(string : string) : ReferenceCommande
+  }
+}
+
+package "Contenus et traçabilité" #FFFFFF {
+  class "Avis" as Avis <<entity>> {
+    - id : Uuid
+    - note : int «1..5»
+    - commentaire : string «10..1000, sans HTML»
+    - statutModeration : StatutModeration
+    - motifRefus : ?string
+    + publier() : void
+    + refuser(motif : string) : void
+    + renvoyerEnModeration() : void
+  }
+
+  class "StatutModeration" as StatutModeration <<enumération>> {
+    EN_ATTENTE
+    PUBLIE
+    REFUSE
+  }
+
+  class "JournalAudit" as JournalAudit <<entity, immuable>> {
+    - id : Uuid
+    - action : ActionAudit
+    - ressource : string
+    - ressourceId : ?Uuid
+    - ipHashee : string
+    - creeLe : DateTimeImmutable
+  }
+
+  class "ActionAudit" as ActionAudit <<enumération>> {
+    CONNEXION
+    CLE_REVELEE
+    COMMANDE_VALIDEE
+    COMMANDE_ANNULEE
+    IMPORT_CLES
+    COMPTE_MODIFIE
+  }
+}
+
+' --- Relations ---
+Utilisateur "1" -- "1..*" Role : porte >
+Utilisateur "1" -- "0..*" CodeSecours : protège >
+Utilisateur "1" -- "0..*" Commande : passe >
+Commande "1" *-- "1..*" LigneCommande : contient >
+Commande "1" -- "0..*" Paiement : règle >
+Commande "1" -- "0..*" CommandeHistorique : historise >
+Commande "1" -- "1" StatutCommande : état >
+Commande "1" *-- "1" ReferenceCommande : identifie >
+Paiement "1" -- "1" StatutPaiement : état >
+Utilisateur "1" -- "0..*" Avis : rédige >
+Utilisateur "1" -- "0..*" JournalAudit : est l'auteur >
+Avis "1" -- "1" StatutModeration : état >
+JournalAudit "1" -- "1" ActionAudit : type >
+
+note bottom of Commande
+  Invariants (RG-11, RG-12) :
+  • le montant est toujours recalculé côté serveur à partir des prix en base ;
+  • expireLe = creeLe + 15 min ; passé ce délai la commande passe en
+    EXPIREE et ses clés sont libérées ;
+  • une clé révélée n'est plus remboursable (RG-20).
+end note
+
+note bottom of LigneCommande
+  Chaque ligne reçoit 1..quantite clés de licence
+  (entité CleLicence, voir le diagramme « catalogue et clés ») :
+  la ligne fixe le prix, la clé porte le statut.
+end note
+
+note bottom of JournalAudit
+  Écriture seule, jamais de UPDATE ni de DELETE
+  (trigger trg_journal_audit_immuable). Le journal ne contient
+  ni clé de licence, ni mot de passe, ni donnée de carte.
+end note
+
+@enduml

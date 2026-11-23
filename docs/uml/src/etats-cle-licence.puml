@@ -1,0 +1,75 @@
+@startuml etats-cle-licence
+' ============================================================================
+' SideKey — Cycle de vie d'une clé de licence
+' Notation  : diagramme d'états UML (machine à états de l'entité cle_licence)
+' Objet     : statuts de la clé (RG-04), réservation concurrente et immuabilité
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §6.1, §9.4, §9.6, §10.1
+' Exports   : docs/uml/exports/etats-cle-licence.svg et etats-cle-licence.png (make uml)
+' ============================================================================
+
+title Cycle de vie d'une clé de licence — SideKey\n<size:12>DISPONIBLE → RESERVEE → VENDUE (RG-04) · réservation 15 min · clé vendue immuable</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+
+skinparam wrapWidth 240
+skinparam nodesep 45
+skinparam ranksep 60
+skinparam ArrowFontSize 11
+skinparam noteBackgroundColor #F7F9FB
+skinparam noteBorderColor #90A4AE
+skinparam noteFontSize 11
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #37474F
+  FontSize 12
+}
+hide empty description
+
+state "DISPONIBLE" as DISPONIBLE #E3F2FD
+DISPONIBLE : stock de l'offre (RG-02) · empreinte HMAC unique
+state "RESERVEE" as RESERVEE #E3F2FD
+RESERVEE : ligne_commande_id · expire_le = maintenant + 15 min
+state "VENDUE" as VENDUE #ECEFF1
+VENDUE : immuable · déchiffrée uniquement à la révélation
+
+[*] --> DISPONIBLE : import CSV (US-52)\n[format valide · empreinte HMAC unique · chiffrement AES-256-GCM]
+DISPONIBLE --> RESERVEE : fn_reserver_cles(offre, quantité, ligne)\n[commande EN_ATTENTE_PAIEMENT · stock suffisant]\n/ SELECT … FOR UPDATE SKIP LOCKED
+RESERVEE --> DISPONIBLE : libération\n[commande EXPIREE : fn_liberer_reservations_expirees()\nou ANNULEE : annulation client]
+RESERVEE --> VENDUE : fn_valider_commande(commande)\n[commande PAYEE · paiement accepté]
+VENDUE --> [*]
+
+note right of DISPONIBLE
+  **Import** : la clé est chiffrée en AES-256-GCM avec un IV
+  aléatoire ; son empreinte `HMAC-SHA256` est **unique** (RG-03).
+  C'est l'empreinte, jamais le chiffré, qui garantit l'unicité.
+  Le stock d'une offre = nombre de clés `DISPONIBLE` (RG-02).
+end note
+
+note right of RESERVEE
+  **Réservation de 15 min** (RG-12) : `fn_reserver_cles` prend les
+  clés avec `FOR UPDATE SKIP LOCKED` — deux achats simultanés de la
+  dernière clé ne peuvent pas la vendre deux fois (§10.1).
+  Une clé réservée n'est ni révélable ni remboursable.
+end note
+
+note right of VENDUE
+  **Immuable** : `trg_cle_licence_protection` interdit toute
+  modification et toute suppression d'une clé `VENDUE` (RG-04).
+  **Déchiffrement à la révélation seulement** : AES-256-GCM ouvert
+  dans `LicenceService::reveler()`, après le Voter (propriétaire et
+  commande `PAYEE`) ; la révélation est journalisée.
+  Une clé révélée n'est plus remboursable (RG-20).
+end note
+
+legend right
+  **Trois états** : `DISPONIBLE` → `RESERVEE` → `VENDUE`.
+  Seul retour autorisé : `RESERVEE` → `DISPONIBLE` (RG-04).
+  `VENDUE` est un état terminal.
+end legend
+
+@enduml

@@ -1,0 +1,155 @@
+@startuml uc-back-office
+' ============================================================================
+' SideKey — Cas d'utilisation : back-office
+' Objet     : fonctions du gestionnaire catalogue, du modérateur et de
+'             l'administrateur ; authentification et A2F obligatoires.
+' Source    : docs/cahier_des_charges_v1.2_SideKey.md §4.1, §5.6, §11.4, §11.5
+' Exports   : docs/uml/exports/uc-back-office.svg et .png (make uml)
+' Numérotation : UC-50 à UC-67 (UC-01..UC-18 : vue globale,
+'                UC-20..UC-45 : front-office).
+' ============================================================================
+
+title Cas d'utilisation — back-office\n<size:12>Gestionnaire catalogue · Modérateur · Administrateur · authentification et A2F obligatoires</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 12
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #F7F9FB
+  BorderColor #37474F
+}
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #90A4AE
+}
+
+' Réglages de lisibilité
+skinparam nodesep 26
+skinparam ranksep 45
+skinparam ArrowFontSize 11
+skinparam usecaseFontSize 12
+
+' ---------------------------------------------------------------------------
+' Acteurs (CDC §4.1) — tout rôle back-office impose l'A2F (CDC §11.4)
+' ---------------------------------------------------------------------------
+actor "Gestionnaire\ncatalogue\n(P4)" as gest #F7F9FB
+actor "Modérateur\n(P6)" as modo #F7F9FB
+actor "Administrateur\n(P5)" as admin #F7F9FB
+actor "Serveur SMTP\n(e-mails FR/EN)" as smtp #ECEFF1
+
+rectangle "Back-office SideKey" {
+  usecase "UC-50\nS'authentifier\n(back-office)" as UC50
+  usecase "UC-51\nVérifier l'A2F\n(obligatoire)" as UC51
+
+  usecase "UC-52\nGérer le catalogue\n(jeux, éditeurs, plateformes, genres)" as UC52
+  usecase "UC-53\nGérer les offres et les prix" as UC53
+  usecase "UC-54\nDétecter un conflit\nde version (409)" as UC54
+
+  usecase "UC-55\nImporter des clés (CSV)" as UC55
+  usecase "UC-56\nValider le fichier\n(type, taille, 1 000 lignes)" as UC56
+  usecase "UC-57\nChiffrer les clés\net calculer les empreintes" as UC57
+  usecase "UC-58\nRejeter les doublons\net produire le rapport" as UC58
+
+  usecase "UC-59\nConsulter l'alerte\nde stock bas" as UC59
+  usecase "UC-60\nSuivre les commandes" as UC60
+  usecase "UC-61\nValider une commande\nsuspecte" as UC61
+  usecase "UC-62\nAnnuler une commande\nsuspecte (libération des clés)" as UC62
+
+  usecase "UC-63\nGérer les comptes\net les rôles" as UC63
+  usecase "UC-64\nConsulter le\njournal d'audit" as UC64
+  usecase "UC-65\nConsulter le\ntableau de bord" as UC65
+  usecase "UC-66\nModérer les avis" as UC66
+
+  usecase "UC-67\nJournaliser l'action\nsensible" as UC67
+}
+
+' ---------------------------------------------------------------------------
+' Acteurs → cas
+' ---------------------------------------------------------------------------
+gest --> UC50
+modo --> UC50
+admin --> UC50
+
+UC50 ..> UC51 : <<include>>
+note top of UC52
+  Toutes les fonctions de ce rectangle exigent une session
+  authentifiée (UC-50) <b>et</b> un code A2F valide (UC-51) : le pare-feu
+  Symfony refuse /api/admin/** sans les deux (403, CDC §11.4).
+  Les <<include>> ne sont tracés que sur les cas d'entrée.
+end note
+note bottom of UC51
+  A2F TOTP obligatoire pour
+  GESTIONNAIRE, MODERATEUR
+  et ADMIN (BX-18) : sans code
+  valide, aucun jeton n'est délivré.
+end note
+
+' Gestionnaire catalogue
+gest --> UC52
+gest --> UC53
+gest --> UC55
+gest --> UC59
+gest --> UC60
+
+' Administrateur
+admin --> UC53
+admin --> UC60
+admin --> UC61
+admin --> UC62
+admin --> UC63
+admin --> UC64
+admin --> UC65
+admin --> UC66
+
+' Modérateur
+modo --> UC66
+
+' ---------------------------------------------------------------------------
+' Relations entre cas
+' ---------------------------------------------------------------------------
+UC52 ..> UC50 : <<include>>
+UC53 ..> UC50 : <<include>>
+UC53 ..> UC54 : <<include>>
+UC55 ..> UC50 : <<include>>
+UC55 ..> UC56 : <<include>>
+UC55 ..> UC57 : <<include>>
+UC55 ..> UC58 : <<include>>
+UC60 ..> UC50 : <<include>>
+UC63 ..> UC50 : <<include>>
+UC66 ..> UC50 : <<include>>
+
+UC55 ..> smtp : envoie le rapport\nd'import (facultatif)
+UC61 ..> smtp : e-mail de\nconfirmation
+UC62 ..> smtp : e-mail de\nremboursement
+
+UC54 ..> UC67 : <<extend>>
+UC57 ..> UC67 : <<extend>>
+UC61 ..> UC67 : <<extend>>
+UC62 ..> UC67 : <<extend>>
+UC63 ..> UC67 : <<extend>>
+UC66 ..> UC67 : <<extend>>
+
+legend right
+  <b>Correspondance UC → user story → besoin → priorité</b>
+  |= UC |= User story |= Besoin |= Prio |
+  | UC-50, UC-51 | US-21, US-55 | BX-18 | M |
+  | UC-52 | US-50 | BX-12 | M |
+  | UC-53, UC-54 | US-51 | BX-12, BX-14 | M |
+  | UC-55 à UC-58 | US-52 | BX-11, BX-13 | M |
+  | UC-59 | US-53 | BX-12 | S |
+  | UC-60 à UC-62 | US-54, US-56 | BX-12, BX-15 | M |
+  | UC-63 | US-55 | BX-18 | M |
+  | UC-64 | US-57 | BX-16 | S |
+  | UC-65 | US-58 | BX-12 | C |
+  | UC-66 | US-42 | BX-20 | S |
+  | UC-67 | — (transverse) | BX-16 | M |
+
+  Le modérateur n'accède ni aux commandes, ni aux clés (BX-20) :
+  UC-60 à UC-62 et UC-63 lui sont interdits par la matrice RBAC (§11.5).
+end legend
+
+@enduml

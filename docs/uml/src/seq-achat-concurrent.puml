@@ -1,0 +1,119 @@
+@startuml seq-achat-concurrent
+' ============================================================================
+' SideKey — Séquence : achat concurrent de la dernière clé
+' Objet    : deux clients achètent en même temps la dernière clé disponible
+'            d'une offre ; un seul obtient la clé, l'autre reçoit un refus.
+' Mécanisme: SELECT ... FOR UPDATE SKIP LOCKED dans fn_reserver_cles,
+'            transaction READ COMMITTED, réservation de 15 minutes.
+' Source   : docs/cahier_des_charges_v1.2_SideKey.md §6.2, §9.6, §10.1, §10.3, §14.4
+' Exports  : docs/uml/exports/seq-achat-concurrent.svg et .png (make uml)
+' ============================================================================
+
+title Séquence — achat concurrent de la dernière clé\n<size:12>Un seul client obtient la clé : ni doublon, ni interblocage (ENF-03)</size>
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 11
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #37474F
+skinparam BackgroundColor #FFFFFF
+skinparam sequence {
+  ArrowColor #455A64
+  ActorBorderColor #37474F
+  ActorBackgroundColor #F7F9FB
+  LifeLineBorderColor #90A4AE
+  ParticipantBorderColor #37474F
+  ParticipantBackgroundColor #F7F9FB
+  DividerBackgroundColor #ECEFF1
+}
+
+autonumber "<b>00"
+participant "Client A\n(Léa)" as A
+participant "Client B\n(Marcus)" as B
+participant "API\nCommandeController" as API
+participant "CommandeService" as SVC
+database "PostgreSQL 17" as PG
+participant "Redis" as R
+
+note over PG: offre X : <b>1 seule clé</b> au statut DISPONIBLE
+
+== T1 — les deux clients valident leur panier au même instant (stock = 1) ==
+par
+  A -> API : POST /api/commandes\n{ offreId, quantite: 1 }
+  activate API
+  API -> API : jeton JWT valide, rôle CLIENT,\nDTO validé (quantite 1..5)
+  API -> SVC : creerCommande(utilisateur, lignes)
+  activate SVC
+  SVC -> SVC : contrôle anti-fraude\n(compteur fraude:keys24h:{userId}, Redis)
+  SVC -> PG : BEGIN (READ COMMITTED)
+  SVC -> PG : SELECT fn_reserver_cles(offre_id, 1, ligne)
+  activate PG
+  PG -> PG : SELECT id FROM cle_licence\nWHERE offre_id = $1 AND statut = 'DISPONIBLE'\nORDER BY importee_le\nLIMIT 1 FOR UPDATE SKIP LOCKED
+  note right of PG : La ligne K1 est verrouillée\npour la transaction de A.
+  PG --> SVC : K1 (1 ligne = stock suffisant)
+  deactivate PG
+  SVC -> PG : INSERT commande (EN_ATTENTE_PAIEMENT,\nexpire_le = now() + 15 min),\nINSERT ligne_commande
+  SVC -> PG : UPDATE cle_licence\nSET statut = 'RESERVEE', ligne_commande_id = ...
+  SVC -> PG : COMMIT
+  SVC -> R : SETEX resa:{commandeId} 900
+  SVC --> API : commande { reference, statut }
+  deactivate SVC
+  API --> A : <b>201 Created</b> — reference
+  deactivate API
+else
+  B -> API : POST /api/commandes\n{ offreId, quantite: 1 }
+  activate API
+  API -> SVC : creerCommande(utilisateur, lignes)
+  activate SVC
+  SVC -> PG : BEGIN (READ COMMITTED)
+  SVC -> PG : SELECT fn_reserver_cles(offre_id, 1, ligne)
+  activate PG
+  PG -> PG : SELECT ... FOR UPDATE SKIP LOCKED
+  note right of PG : K1 est <b>déjà verrouillée</b> par A :\nSKIP LOCKED l'ignore.\nAucune autre clé DISPONIBLE → 0 ligne.
+  PG --> SVC : 0 ligne
+  PG --> SVC : RAISE EXCEPTION 'stock insuffisant'
+  deactivate PG
+  SVC -> PG : ROLLBACK
+  note right of SVC : Aucune clé n'a été réservée,\naucune commande n'est créée.\nAucune attente, aucun interblocage.
+  SVC --> API : StockInsuffisantException
+  deactivate SVC
+  API --> B : <b>409 Conflict</b>\n{ message: "Plus de clé pour cette offre" }
+  deactivate API
+end
+
+== T2 — A paie : la clé passe de RESERVEE à VENDUE ==
+A -> API : POST /api/paiements\n{ reference, cleIdempotence }
+activate API
+API -> SVC : payerCommande(reference, cleIdempotence)
+activate SVC
+SVC -> R : SET idem:{cleIdempotence} NX EX 24h
+alt clé d'idempotence déjà utilisée
+  SVC --> API : paiement déjà traité (replay)
+  API --> A : 200 — même réponse qu'au premier appel
+else première tentative
+  note over SVC,PG : L'appel au PSP se fait <b>hors transaction</b>\npour ne pas garder de verrou pendant l'appel externe.
+  SVC -> PG : SELECT fn_valider_commande(commande)
+  activate PG
+  PG -> PG : vérifie statut = EN_ATTENTE_PAIEMENT\net expire_le > now()
+  PG -> PG : UPDATE cle_licence SET statut = 'VENDUE'\nWHERE ligne_commande_id IN (...)
+  PG -> PG : UPDATE commande SET statut = 'PAYEE', payee_le = now()
+  PG -> PG : trg_commande_historique → commande_historique
+  PG --> SVC : commande PAYEE (transaction unique, atomique)
+  deactivate PG
+  SVC -> R : DEL resa:{commandeId}
+  SVC --> API : commande PAYEE
+  API --> A : 200 — clé disponible dans « Mes commandes »
+end
+deactivate SVC
+deactivate API
+
+== T3 — filet de sécurité : libération des réservations expirées ==
+SVC -> PG : SELECT fn_liberer_reservations_expirees()\n(Symfony Scheduler, toutes les minutes)
+activate PG
+PG -> PG : UPDATE cle_licence SET statut = 'DISPONIBLE',\nligne_commande_id = NULL\nWHERE statut = 'RESERVEE' AND commande expirée
+PG -> PG : UPDATE commande SET statut = 'EXPIREE'
+PG --> SVC : clés rendues au stock
+deactivate PG
+note over A,B : ENF-03 — 50 achats simultanés de la dernière clé :\n1 seul 201, 49 × 409, 0 clé vendue deux fois (test k6).
+
+@enduml
