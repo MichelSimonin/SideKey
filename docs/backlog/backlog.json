@@ -1,0 +1,335 @@
+{
+  "milestones": {
+    "S1": "S1 · Conception et socle (J1–J5)",
+    "S2": "S2 · Features (J6–J10)",
+    "S3": "S3 · Livraison (J11–J13)"
+  },
+  "definition_of_done": [
+    "PR relue et approuvée par l'autre membre, titre au format Conventional Commits",
+    "CI verte (tests, analyse statique, audit des dépendances)",
+    "Tests unitaires écrits, et tests de sécurité quand la feature touche à l'auth, aux données ou aux clés",
+    "Textes de l'interface disponibles en FR et en EN",
+    "Validation des entrées et contrôle d'accès vérifiés dans chaque couche (contrôleur, service, repository)",
+    "Déployé en recette et montré lors de la démo du soir",
+    "Dossier de projet complété (choix techniques, captures, extraits de code)"
+  ],
+  "items": [
+    {
+      "id": "C-01", "type": "conception", "title": "Valider le cahier des charges v1.2 et importer le backlog",
+      "attribution": "Ensemble", "priority": "M", "estimate": 0.5, "day": "J1", "milestone": "S1", "deps": [],
+      "description": "Relire ensemble le cahier des charges v1.2, confirmer le périmètre (clés uniques uniquement, Redis seul, hébergement UE) et importer ce backlog dans GitHub Projects.",
+      "acceptance": [
+        "Le CDC v1.2 est versionné dans le dépôt (docs/)",
+        "Les 35 issues sont créées et rattachées au Project avec leurs champs",
+        "Les colonnes du Status sont renommées : Backlog / Jour J / En cours / En revue / Terminé"
+      ]
+    },
+    {
+      "id": "T-00", "type": "technique", "title": "Initialiser le dépôt et l'environnement Docker",
+      "attribution": "Ensemble", "priority": "M", "estimate": 1, "day": "J1", "milestone": "S1", "deps": [],
+      "description": "Créer la structure du monorepo (api/ Symfony, front/ React), le Docker Compose (PHP-FPM, Nginx, PostgreSQL, Redis, Node) et les fichiers de gouvernance du dépôt.",
+      "acceptance": [
+        "docker compose up démarre l'API, le front, PostgreSQL et Redis",
+        "README avec la procédure d'installation locale",
+        ".env.example versionné, tous les .env ignorés",
+        "CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING.md (Conventional Commits, GitHub Flow, squash merge)",
+        "Workflows ci.yml (job ci-success) et pr-title.yml en place, puis ruleset de main importé"
+      ]
+    },
+    {
+      "id": "C-02", "type": "conception", "title": "Maquettes Figma FR/EN et schéma d'enchaînement des écrans",
+      "attribution": "Ensemble", "priority": "M", "estimate": 1, "day": "J1–J2", "milestone": "S1", "deps": ["C-01"],
+      "description": "Wireframes puis maquettes des écrans : catalogue, fiche jeu, panier, tunnel de commande, compte client, back-office. Schéma d'enchaînement des écrans. Prise en compte du RGAA et de l'éco-conception.",
+      "acceptance": [
+        "Maquettes des écrans principaux en FR et au moins une version EN",
+        "Schéma d'enchaînement des écrans exporté dans docs/",
+        "Contrastes et navigation clavier pris en compte (RGAA)",
+        "Chaque écran est relié aux user stories et aux personas qui le justifient"
+      ]
+    },
+    {
+      "id": "C-03", "type": "conception", "title": "Modélisation PlantUML et ADR",
+      "attribution": "Ensemble", "priority": "M", "estimate": 1, "day": "J2", "milestone": "S1", "deps": ["C-01"],
+      "description": "Diagrammes de cas d'utilisation, de classes et de séquence (dont l'achat concurrent de la dernière clé), MCD/MLD/MPD, architecture en couches. Rédiger les ADR des choix structurants.",
+      "acceptance": [
+        "Sources PlantUML versionnées dans docs/uml/ avec leurs exports",
+        "MCD, MLD et MPD cohérents (jeu, éditeur, plateforme, client, commande, ligne, clé de licence)",
+        "Diagramme de séquence de l'achat concurrent",
+        "ADR : Symfony + React, PostgreSQL + Redis, JWT + refresh token, chiffrement des clés, hébergement UE",
+        "Critères DICP et security patterns retenus documentés"
+      ]
+    },
+    {
+      "id": "T-01", "type": "technique", "title": "Base de données : schéma, rôles SGBD, jeu d'essai et sauvegarde",
+      "attribution": "M1", "priority": "M", "estimate": 1, "day": "J3", "milestone": "S1", "deps": ["T-00", "C-03"],
+      "description": "Migrations Doctrine du schéma, contraintes d'intégrité, comptes PostgreSQL avec droits minimaux, base de test avec jeu d'essai, scripts de sauvegarde et de restauration.",
+      "acceptance": [
+        "Migrations appliquées sans erreur sur une base vide",
+        "Contraintes : clés primaires et étrangères, CHECK, unicité de l'empreinte des clés",
+        "Comptes sk_app (CRUD limité), sk_admin et sk_readonly créés par script, avec GRANT/REVOKE",
+        "Base sidekey_test et jeu d'essai avec cas limites (dernière clé, compte désactivé, commande annulée)",
+        "Sauvegarde pg_dump et restauration testées et documentées"
+      ]
+    },
+    {
+      "id": "T-04", "type": "technique", "title": "Déploiement continu en recette (hébergeur UE)",
+      "attribution": "M2", "priority": "M", "estimate": 1, "day": "J3", "milestone": "S1", "deps": ["T-00"],
+      "description": "Choisir l'hébergeur dans l'UE, préparer l'environnement de recette et le déploiement automatique depuis main. Préparer le déploiement en production sur tag v* avec approbation.",
+      "acceptance": [
+        "Hébergeur UE choisi et justifié (ADR)",
+        "Chaque merge sur main déploie automatiquement en recette",
+        "Environnements GitHub staging et production configurés, secrets par environnement",
+        "Workflow de production déclenché par un tag v*, avec approbation de l'autre membre",
+        "Procédure de retour arrière documentée"
+      ]
+    },
+    {
+      "id": "F-02", "type": "feature", "title": "Internationalisation FR/EN",
+      "attribution": "M2", "priority": "M", "estimate": 0.5, "day": "J4", "milestone": "S1", "deps": ["T-00"],
+      "description": "Mettre en place l'i18n côté React et côté API (messages d'erreur, e-mails), avec sélecteur de langue et langue par défaut selon le navigateur.",
+      "acceptance": [
+        "Sélecteur FR/EN visible sur toutes les pages, choix mémorisé",
+        "Aucun texte d'interface codé en dur",
+        "Messages d'erreur de l'API traduits selon Accept-Language",
+        "Attribut lang de la page mis à jour (RGAA)"
+      ]
+    },
+    {
+      "id": "T-02", "type": "technique", "title": "Procédures stockées, fonctions et triggers défensifs",
+      "attribution": "M2", "priority": "M", "estimate": 1, "day": "J4", "milestone": "S1", "deps": ["T-01"],
+      "description": "Écrire en style défensif les routines SQL du métier : attribution d'une clé à une commande, historique des changements de statut, garde-fous d'intégrité.",
+      "acceptance": [
+        "Fonction d'attribution de clé qui valide ses paramètres et lève une erreur explicite",
+        "Trigger qui historise chaque changement de statut de commande",
+        "Trigger qui interdit de modifier une clé déjà vendue",
+        "Droits EXECUTE accordés uniquement au compte sk_app",
+        "Tests des cas d'erreur sur la base de test"
+      ]
+    },
+    {
+      "id": "F-03", "type": "feature", "title": "Authentification JWT, refresh token et RBAC",
+      "attribution": "M1", "priority": "M", "estimate": 1, "day": "J4", "milestone": "S1", "deps": ["T-01"],
+      "description": "Inscription et connexion avec jeton d'accès de 15 minutes gardé en mémoire, refresh token dans un cookie HttpOnly/Secure/SameSite révocable via Redis, rôles client / gestionnaire / admin.",
+      "acceptance": [
+        "Mots de passe hachés en Argon2id, politique conforme ANSSI/CNIL",
+        "Jeton d'accès de 15 min, refresh token en cookie protégé, rotation et révocation dans Redis",
+        "Route de rafraîchissement protégée contre le CSRF",
+        "Limitation des tentatives de connexion par Redis",
+        "Contrôle d'accès par rôle sur chaque route, testé (accès refusé = 403)"
+      ]
+    },
+    {
+      "id": "F-04", "type": "feature", "title": "A2F obligatoire pour le back-office",
+      "attribution": "M1", "priority": "M", "estimate": 0.5, "day": "J5", "milestone": "S1", "deps": ["F-03"],
+      "description": "Authentification à deux facteurs TOTP obligatoire pour les rôles gestionnaire et admin, avec codes de secours.",
+      "acceptance": [
+        "Enrôlement TOTP par QR code",
+        "Accès au back-office impossible sans second facteur validé",
+        "Codes de secours à usage unique, stockés hachés",
+        "Tentatives limitées"
+      ]
+    },
+    {
+      "id": "F-05", "type": "feature", "title": "Panier Redis et réservation temporaire de 15 minutes",
+      "attribution": "M2", "priority": "M", "estimate": 1, "day": "J5", "milestone": "S1", "deps": ["T-01"],
+      "description": "Panier stocké dans Redis (clé/valeur) avec TTL, et réservation temporaire des clés pendant 15 minutes au passage en commande.",
+      "acceptance": [
+        "Ajout, retrait et modification de quantité dans le panier",
+        "Panier expiré automatiquement (TTL)",
+        "Réservation de 15 min au début du tunnel, libérée à l'expiration",
+        "Quantité limitée par le stock de clés disponibles",
+        "Tests du composant d'accès Redis"
+      ]
+    },
+    {
+      "id": "F-01", "type": "feature", "title": "Catalogue, recherche, filtres et cache Redis",
+      "attribution": "M1", "priority": "M", "estimate": 1, "day": "J6", "milestone": "S2", "deps": ["T-01", "F-02"],
+      "description": "Liste paginée des jeux, recherche, filtres (plateforme, éditeur, prix), fiche jeu avec disponibilité. Mise en cache des listes dans Redis.",
+      "acceptance": [
+        "Liste paginée, recherche et filtres combinables",
+        "Fiche jeu avec plateforme, éditeur, prix et disponibilité",
+        "Cache Redis invalidé quand le catalogue change",
+        "Requêtes paramétrées uniquement, sorties échappées (XSS)",
+        "Images légères et chargement différé (éco-conception)"
+      ]
+    },
+    {
+      "id": "F-08", "type": "feature", "title": "Gestion des clés : chiffrement AES-GCM et empreinte HMAC",
+      "attribution": "M2", "priority": "M", "estimate": 1.5, "day": "J6", "milestone": "S2", "deps": ["T-02", "F-04"],
+      "description": "Import des clés par le back-office, chiffrement AES-GCM, empreinte HMAC unique pour détecter les doublons, révélation de la clé au client après paiement.",
+      "acceptance": [
+        "Clés chiffrées en AES-GCM, secret hors du dépôt",
+        "Empreinte HMAC unique : une clé en double est refusée",
+        "Import par lot avec rapport d'erreurs",
+        "Clé visible uniquement par son acheteur, chaque affichage journalisé",
+        "Tests de sécurité : pas de clé en clair dans la base, les logs ou les réponses de l'API"
+      ]
+    },
+    {
+      "id": "T-03", "type": "technique", "title": "CI complète : tests, analyse statique et audit",
+      "attribution": "M1", "priority": "M", "estimate": 0.5, "day": "J7", "milestone": "S2", "deps": ["T-00"],
+      "description": "Compléter la pipeline : PHPUnit, tests front, PHPStan, ESLint, Semgrep pour le PHP, audits Composer et npm, couverture. Tout passe par le job ci-success.",
+      "acceptance": [
+        "PHPUnit et tests front exécutés avec une base PostgreSQL et un Redis de service",
+        "PHPStan, ESLint et Semgrep bloquants",
+        "composer audit et npm audit bloquants sur les failles hautes",
+        "Rapport de couverture publié",
+        "ci-success dépend de tous les jobs"
+      ]
+    },
+    {
+      "id": "F-06", "type": "feature", "title": "Commande et gestion de la concurrence",
+      "attribution": "M2", "priority": "M", "estimate": 1.5, "day": "J7–J8", "milestone": "S2", "deps": ["F-05", "F-08"],
+      "description": "Création de la commande en transaction, attribution des clés avec SELECT … FOR UPDATE SKIP LOCKED, statuts de commande. Scénario de référence : deux clients achètent la dernière clé en même temps.",
+      "acceptance": [
+        "Commande, lignes et attribution des clés dans une seule transaction",
+        "Niveau d'isolation choisi et justifié",
+        "Test de charge : deux achats simultanés de la dernière clé donnent une seule vente",
+        "Statuts de commande et transitions contrôlées",
+        "Aucune clé attribuée deux fois (vérifié par le test)"
+      ]
+    },
+    {
+      "id": "F-07", "type": "feature", "title": "Paiement simulé et anti-fraude « Équilibré »",
+      "attribution": "M1", "priority": "M", "estimate": 1, "day": "J8", "milestone": "S2", "deps": ["F-06"],
+      "description": "Faux prestataire de paiement (accepté pour la v1 et justifié dans le dossier) et règles anti-fraude du niveau Équilibré (RG-14).",
+      "acceptance": [
+        "Paiement simulé avec cas succès, refus et erreur",
+        "Règle RG-14 appliquée : seuils de nombre de clés, de montant et d'échecs de paiement",
+        "Commande suspecte mise en attente de validation dans le back-office",
+        "Compteurs anti-fraude dans Redis",
+        "Aucune donnée de carte stockée"
+      ]
+    },
+    {
+      "id": "F-09", "type": "feature", "title": "Back-office catalogue",
+      "attribution": "M1", "priority": "M", "estimate": 1, "day": "J9", "milestone": "S2", "deps": ["F-01", "F-04"],
+      "description": "Gestion des jeux, éditeurs, plateformes et prix par les gestionnaires et admins.",
+      "acceptance": [
+        "CRUD jeux, éditeurs et plateformes",
+        "Validation des formulaires côté front et côté API",
+        "Téléversement d'images sécurisé (type, taille, nom régénéré)",
+        "Accès réservé aux rôles autorisés avec A2F"
+      ]
+    },
+    {
+      "id": "F-10", "type": "feature", "title": "Back-office commandes et journal d'audit",
+      "attribution": "M2", "priority": "M", "estimate": 0.5, "day": "J9", "milestone": "S2", "deps": ["F-06", "F-07"],
+      "description": "Liste et détail des commandes, validation ou annulation des commandes suspectes, journal d'audit des actions sensibles.",
+      "acceptance": [
+        "Liste filtrable des commandes et détail",
+        "Validation ou annulation des commandes en attente",
+        "Journal d'audit : qui, quoi, quand, sur quelle ressource",
+        "Le journal ne contient aucune clé en clair"
+      ]
+    },
+    {
+      "id": "P-01", "type": "pool", "title": "Avis clients et modération",
+      "attribution": "Pool", "priority": "S", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["F-06"],
+      "description": "Avis et note sur un jeu acheté, modération dans le back-office.",
+      "acceptance": ["Avis possible uniquement après achat", "Contenu échappé (XSS)", "Modération : publier, masquer"]
+    },
+    {
+      "id": "P-02", "type": "pool", "title": "Tests de sécurité automatisés",
+      "attribution": "Pool", "priority": "S", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["T-03"],
+      "description": "Tests automatisés des contrôles OWASP principaux et scan dynamique de la recette.",
+      "acceptance": ["Tests d'accès refusé (IDOR, rôles)", "Tests d'injection et de XSS", "Scan OWASP ZAP de la recette dans la CI"]
+    },
+    {
+      "id": "P-03", "type": "pool", "title": "Tests de bout en bout",
+      "attribution": "Pool", "priority": "S", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["F-07"],
+      "description": "Tests E2E du parcours d'achat complet.",
+      "acceptance": ["Parcours catalogue → panier → commande → paiement → clé", "Exécutés dans la CI"]
+    },
+    {
+      "id": "P-04", "type": "pool", "title": "Réinitialisation du mot de passe",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["F-03"],
+      "description": "Lien de réinitialisation par e-mail à usage unique.",
+      "acceptance": ["Jeton à usage unique avec TTL dans Redis", "Réponse identique que le compte existe ou non", "Sessions révoquées après changement"]
+    },
+    {
+      "id": "P-05", "type": "pool", "title": "Droits RGPD : export et suppression du compte",
+      "attribution": "Pool", "priority": "S", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["F-03"],
+      "description": "Export des données personnelles et suppression du compte, en respectant les durées de conservation légales.",
+      "acceptance": ["Export JSON des données du client", "Suppression ou anonymisation du compte", "Pièces comptables conservées 10 ans"]
+    },
+    {
+      "id": "P-06", "type": "pool", "title": "A2F facultative pour les clients",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["F-04"],
+      "description": "Proposer l'A2F TOTP aux clients qui le souhaitent.",
+      "acceptance": ["Activation et désactivation depuis le compte", "Codes de secours"]
+    },
+    {
+      "id": "P-07", "type": "pool", "title": "Analyse SonarQube / SonarCloud",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["T-03"],
+      "description": "Ajouter Sonar à la CI avec un quality gate.",
+      "acceptance": ["Analyse à chaque PR", "Quality gate bloquant"]
+    },
+    {
+      "id": "P-08", "type": "pool", "title": "Mesure EcoIndex",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["F-01"],
+      "description": "Mesurer l'EcoIndex des pages principales et corriger les points faibles.",
+      "acceptance": ["Mesure des pages catalogue, fiche jeu et panier", "Résultats et actions dans le dossier"]
+    },
+    {
+      "id": "P-09", "type": "pool", "title": "Alerte de stock de clés bas",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["F-08"],
+      "description": "Prévenir le gestionnaire quand le stock de clés d'un jeu passe sous un seuil.",
+      "acceptance": ["Seuil configurable par jeu", "Alerte visible dans le back-office"]
+    },
+    {
+      "id": "P-10", "type": "pool", "title": "Fusion du panier invité et tri du catalogue",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["F-05", "F-01"],
+      "description": "Fusionner le panier invité avec le panier du compte à la connexion, ajouter le tri du catalogue.",
+      "acceptance": ["Panier invité conservé après connexion", "Tri par prix, nouveauté et nom"]
+    },
+    {
+      "id": "P-11", "type": "pool", "title": "Écran de consultation du journal d'audit",
+      "attribution": "Pool", "priority": "S", "estimate": 0.5, "day": "J10+", "milestone": "", "deps": ["F-10"],
+      "description": "Écran admin pour filtrer et consulter le journal d'audit.",
+      "acceptance": ["Filtres par utilisateur, action et date", "Accès réservé à l'admin"]
+    },
+    {
+      "id": "P-12", "type": "pool", "title": "Tableau de bord des ventes",
+      "attribution": "Pool", "priority": "C", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["F-10"],
+      "description": "Indicateurs de ventes, lus avec le compte sk_readonly.",
+      "acceptance": ["Ventes par jour et par jeu", "Lecture via le compte sk_readonly"]
+    },
+    {
+      "id": "P-13", "type": "pool", "title": "Import asynchrone des clés",
+      "attribution": "Pool", "priority": "C", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["F-08"],
+      "description": "Traiter les gros imports de clés en tâche de fond (Symfony Messenger avec transport Redis).",
+      "acceptance": ["Import en arrière-plan avec suivi d'avancement", "Rapport d'erreurs à la fin"]
+    },
+    {
+      "id": "L-01", "type": "livraison", "title": "Tests de sécurité croisés et audit d'accessibilité",
+      "attribution": "Ensemble", "priority": "M", "estimate": 1, "day": "J11", "milestone": "S3", "deps": ["F-10"],
+      "description": "Chaque membre teste la sécurité des features de l'autre ; audit RGAA des écrans principaux.",
+      "acceptance": ["Grille OWASP Top 10 remplie pour chaque feature", "Audit RGAA des écrans principaux", "Corrections faites ou listées"]
+    },
+    {
+      "id": "L-02", "type": "livraison", "title": "Version v1.0.0 en production et test de restauration",
+      "attribution": "Ensemble", "priority": "M", "estimate": 0.5, "day": "J11", "milestone": "S3", "deps": ["L-01", "T-04"],
+      "description": "Taguer la v1.0.0, déployer en production et tester la restauration de la sauvegarde.",
+      "acceptance": ["Tag v1.0.0 et notes de version", "Production déployée après approbation", "Restauration de la sauvegarde testée"]
+    },
+    {
+      "id": "L-03", "type": "livraison", "title": "Dossier de projet",
+      "attribution": "Ensemble", "priority": "M", "estimate": 1, "day": "J11–J12", "milestone": "S3", "deps": ["L-01"],
+      "description": "Finaliser le dossier de projet, avec une partie rédigée en anglais.",
+      "acceptance": ["Chaque critère des compétences 5 à 8 illustré", "Partie en anglais", "Relu par les deux membres"]
+    },
+    {
+      "id": "L-04", "type": "livraison", "title": "Diaporama et démonstration",
+      "attribution": "Ensemble", "priority": "M", "estimate": 0.5, "day": "J12", "milestone": "S3", "deps": ["L-02"],
+      "description": "Préparer le diaporama et le scénario de démonstration, dont l'achat concurrent de la dernière clé.",
+      "acceptance": ["Diaporama terminé", "Scénario de démo écrit et testé sur la production"]
+    },
+    {
+      "id": "L-05", "type": "livraison", "title": "Répétition de l'oral",
+      "attribution": "Ensemble", "priority": "M", "estimate": 0.5, "day": "J13", "milestone": "S3", "deps": ["L-03", "L-04"],
+      "description": "Répéter l'oral en conditions réelles ; chacun doit pouvoir défendre seul les quatre compétences.",
+      "acceptance": ["Répétition chronométrée", "Questions du jury préparées"]
+    }
+  ]
+}
