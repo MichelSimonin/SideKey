@@ -1,0 +1,83 @@
+@startuml enchainement-ecrans
+' SideKey — schéma d'enchaînement des écrans (issue C-02, CDC v1.2 §7)
+' Rendu : docker run --rm -v "$PWD/docs/maquettes":/data plantuml/plantuml -tsvg /data/enchainement-ecrans.puml
+
+!theme plain
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam roundCorner 10
+skinparam ArrowColor #1F2937
+skinparam ArrowFontSize 11
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor #1F2937
+}
+skinparam package {
+  BorderColor #6B7280
+  FontStyle bold
+}
+left to right direction
+
+title SideKey — enchaînement des écrans\n<size:11>Tous les écrans existent en FR et en EN ; sélecteur de langue dans l'en-tête de chaque écran</size>
+
+package "Front-office (visiteur / client)" {
+  rectangle "E01\nAccueil" as E01
+  rectangle "E02\nCatalogue\n<size:10>filtres, recherche, tri</size>" as E02
+  rectangle "E03\nFiche jeu\n<size:10>PEGI, offres, avis</size>" as E03
+  rectangle "E04\nPanier" as E04
+  hexagon "Connecté ?" as AUTH
+  rectangle "E05\nConnexion / Inscription\n/ A2F" as E05
+  rectangle "E06\nTunnel 1/3\nRécapitulatif\n<size:10>réservation 15 min, PEGI 18</size>" as E06 #F3F4F6
+  rectangle "E07\nTunnel 2/3\nPaiement simulé" as E07 #F3F4F6
+  rectangle "E08\nTunnel 3/3\nConfirmation" as E08 #F3F4F6
+  rectangle "E09\nMes commandes\net mes clés" as E09
+  rectangle "E10\nProfil, langue,\nsécurité (A2F), RGPD" as E10
+}
+
+E01 --> E02 : parcourir / rechercher
+E01 --> E03 : jeu mis en avant
+E02 --> E03 : choisir un jeu
+E03 --> E04 : ajouter au panier
+E04 --> E02 : continuer mes achats
+E04 --> AUTH : commander
+AUTH --> E05 : non
+E05 --> E06 : connecté
+AUTH --> E06 : oui
+E06 --> E07 : payer
+E07 --> E07 : refusé\n(réservation conservée)
+E07 --> E08 : accepté
+E06 ..> E04 : réservation expirée
+E08 --> E09 : voir mes clés
+E09 --> E03 : donner un avis
+E01 --> E10 : menu compte
+E01 --> E09 : menu compte
+
+package "Back-office (A2F obligatoire, menu filtré par rôle)" {
+  rectangle "Connexion\nback-office + A2F" as BOL
+  rectangle "E11\nTableau de bord\n<size:10>Gestionnaire, Admin</size>" as E11
+  rectangle "E12\nJeux et offres\n<size:10>Gestionnaire, Admin</size>" as E12
+  rectangle "E13\nImport de clés\n<size:10>Gestionnaire, Admin</size>" as E13
+  rectangle "E14\nCommandes\n<size:10>Gestionnaire (lecture), Admin</size>" as E14
+  rectangle "E14b\nFile « à vérifier »\n<size:10>Admin</size>" as E14b
+  rectangle "E15\nModération des avis\n<size:10>Modérateur, Admin</size>" as E15
+  rectangle "E16\nUtilisateurs, rôles,\naudit\n<size:10>Admin</size>" as E16
+}
+
+BOL --> E11 : gestionnaire, admin
+BOL --> E15 : modérateur
+E11 --> E12
+E11 --> E13
+E11 --> E14
+E14 --> E14b : commandes suspectes
+E11 --> E15
+E11 --> E16
+E12 ..> E13 : importer des clés\npour cette offre
+
+legend right
+  Trait plein : navigation de l'utilisateur
+  Pointillés : redirection ou raccourci
+  Fond gris : tunnel de commande (3 étapes)
+endlegend
+
+@enduml
