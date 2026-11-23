@@ -79,3 +79,16 @@ Exemples : `make console c="debug:router"`, `make composer c="require symfony/or
 ## Variables d'environnement
 
 Aucun fichier `.env` n'est versionné : seuls les `.env.example` le sont, sans aucun secret.
+
+## Tests et CI
+
+```bash
+make test        # PHPUnit (api/) + Vitest et oxlint (front/)
+```
+
+- Tests API : `api/tests/Unit` (sans Symfony), `api/tests/Integration` (noyau Symfony), `api/tests/Security`.
+- Tests front : à côté du code, `*.test.ts(x)`, avec Vitest + Testing Library (jsdom).
+- CI GitHub Actions (`.github/workflows/`) à chaque PR et push sur `main` :
+  - `ci.yml` : jobs `api` (composer validate/audit, lint config, PHPUnit), `front` (npm audit, lint, Vitest, build typé), `docker` (validation de `compose.yaml`), et `ci-success` qui les regroupe ;
+  - `pr-title.yml` : le titre de PR doit suivre Conventional Commits (il devient le message du squash merge).
+- Seuls `ci-success` et `pr-title` sont exigés par la protection de `main`.
