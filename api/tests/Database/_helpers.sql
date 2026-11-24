@@ -69,3 +69,34 @@ LANGUAGE sql AS $$
     VALUES ('\x00'::bytea, sha256(convert_to(gen_random_uuid()::text, 'UTF8')), p_statut, p_offre, p_ligne)
     RETURNING id
 $$;
+
+-- Exécution sous un autre rôle (SET LOCAL ROLE, remis à zéro dans tous les cas).
+CREATE FUNCTION pg_temp.rejette_en_tant_que(nom_role text, instruction text, etat_attendu text, message text) RETURNS void
+LANGUAGE plpgsql AS $$
+DECLARE etat text; texte text;
+BEGIN
+    EXECUTE format('SET LOCAL ROLE %I', nom_role);
+    BEGIN
+        EXECUTE instruction;
+    EXCEPTION WHEN OTHERS THEN
+        etat := SQLSTATE; texte := SQLERRM;
+    END;
+    RESET ROLE;
+    IF etat IS NULL THEN
+        RAISE EXCEPTION 'ECHEC : % (aucune erreur levée pour %)', message, nom_role;
+    ELSIF etat <> etat_attendu THEN
+        RAISE EXCEPTION 'ECHEC : % (SQLSTATE obtenu %, attendu %) : %', message, etat, etat_attendu, texte;
+    END IF;
+    RAISE NOTICE 'ok - %', message;
+END
+$$;
+
+CREATE FUNCTION pg_temp.accepte_en_tant_que(nom_role text, instruction text, message text) RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+    EXECUTE format('SET LOCAL ROLE %I', nom_role);
+    EXECUTE instruction;
+    RESET ROLE;
+    RAISE NOTICE 'ok - %', message;
+END
+$$;

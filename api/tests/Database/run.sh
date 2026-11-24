@@ -31,6 +31,26 @@ run_tests() {
     done
 }
 
+if [ -f "$SQL_DIR/roles/01_roles.sql" ]; then
+    echo "== Connexion réelle des comptes applicatifs (mot de passe, droits)"
+    DEV_PW="${SK_DEV_PASSWORD:-change_me_dev}"
+    connecte() { PGUSER="$1" PGPASSWORD="$2" psql -X -q -At -c "$3" 2>/dev/null; }
+    for compte in "sk_owner:${SK_OWNER_PASSWORD:-$DEV_PW}" "sk_app:${SK_APP_PASSWORD:-$DEV_PW}" \
+                  "sk_reporting:${SK_REPORTING_PASSWORD:-$DEV_PW}" "sk_backup:${SK_BACKUP_PASSWORD:-$DEV_PW}"; do
+        nom="${compte%%:*}"
+        if [ "$(connecte "$nom" "${compte#*:}" 'SELECT current_user')" != "$nom" ]; then
+            echo "ECHEC : connexion impossible avec $nom" >&2
+            exit 1
+        fi
+        echo "ok - connexion de $nom"
+    done
+    if connecte sk_app "${SK_APP_PASSWORD:-$DEV_PW}" 'DELETE FROM cle_licence' >/dev/null; then
+        echo "ECHEC : sk_app a pu supprimer des clés de licence" >&2
+        exit 1
+    fi
+    echo "ok - sk_app ne peut pas supprimer de clé de licence (connexion réelle)"
+fi
+
 run_tests "$HERE"/0[1-9]_*_test.sql "$HERE"/[1-3][0-9]_*_test.sql
 
 if ls "$SQL_DIR"/seed/*.sql >/dev/null 2>&1; then

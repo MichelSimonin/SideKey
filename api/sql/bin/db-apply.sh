@@ -37,11 +37,11 @@ fi
 for f in "$SQL_DIR"/schema/[0-9]*.sql; do
     case "$f" in *.down.sql) continue ;; esac
     echo "-> $(basename "$f")"
-    PGOPTIONS="$SCHEMA_OPTIONS" psql_run --single-transaction -f "$f"
+    ( export PGOPTIONS="$SCHEMA_OPTIONS"; psql_run --single-transaction -f "$f" )
 done
 
 if [ -f "$SQL_DIR/roles/02_privileges.sql" ]; then
     echo "-> droits (GRANT / REVOKE)"
-    PGOPTIONS="$SCHEMA_OPTIONS" psql_run -f "$SQL_DIR/roles/02_privileges.sql"
+    ( export PGOPTIONS="$SCHEMA_OPTIONS"; psql_run -f "$SQL_DIR/roles/02_privileges.sql" )
 fi
 echo "Schéma appliqué sur $(psql -X -Atc 'SELECT current_database()')."
