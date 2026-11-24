@@ -3,7 +3,7 @@ DC = docker compose
 PHP = $(DC) exec php
 
 .DEFAULT_GOAL := help
-.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli db-migrate db-reset db-test test test-api test-front uml clean
+.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli db-migrate db-reset db-test db-seed test test-api test-front uml clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -64,6 +64,9 @@ db-reset: ## Vide la base de dev puis réapplique le schéma (SUPPRIME les donn�
 
 db-test: ## Tests de la base : migrations sur base vide + tests SQL
 	$(PHP) sh tests/Database/run.sh
+
+db-seed: ## Recrée la base sidekey_test (schéma + jeu d'essai). SUPPRIME ses données
+	$(PHP) env PGDATABASE=sidekey_test sh sql/bin/db-seed.sh --reset
 
 test: test-api test-front ## Lance tous les tests (API + front)
 
