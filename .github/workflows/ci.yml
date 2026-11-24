@@ -108,11 +108,47 @@ jobs:
           cp .env.example .env
           docker compose config --quiet
 
+  database:
+    name: Base de données (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres   # base jetable de la CI, sans lien avec un vrai secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      # pg_dump refuse un serveur plus récent que lui : client de même version majeure que le serveur
+      - name: Client PostgreSQL 17
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Migrations sur base vide et tests SQL
+        run: sh api/tests/Database/run.sh
+
   # Seul contrôle exigé par la protection de main : ajouter un job ici ne demande pas de modifier la règle
   ci-success:
     name: ci-success
     if: always()
-    needs: [api, front, docker]
+    needs: [api, front, docker, database]
     runs-on: ubuntu-latest
     steps:
       - name: Tous les jobs doivent réussir

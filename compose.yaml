@@ -11,6 +11,12 @@ services:
       # APP_ENV vient de api/.env (dev) : ne pas le forcer ici, sinon PHPUnit ne passe plus en "test"
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}?serverVersion=17&charset=utf8"
       REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
+      # Variables libpq : les scripts psql / pg_dump du conteneur se connectent sans option
+      PGHOST: database
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
       XDEBUG_MODE: ${XDEBUG_MODE:-off}
     extra_hosts:
       - "host.docker.internal:host-gateway"
