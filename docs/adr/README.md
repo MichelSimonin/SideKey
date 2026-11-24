@@ -72,11 +72,11 @@ Exemple concret : ADR-0005 pose le principe d'un hébergement dans l'UE, laissan
 | Décision                                                                      | Qui                                    | Comment                                                                               |
 | ----------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------- |
 | Architecture, technologies, mécanismes                                        | Binôme SideKey (M1, M2), à l'unanimité | Fiche rédigée puis relue en PR ; 1 approbation obligatoire par l'autre membre (§16.5) |
-| Décision déjà arbitrée par le formateur ou le cahier des charges (F*, B*, R*) | Le binôme applique                     | L'ADR traduit la décision et expose ses conséquences, sans la remettre en cause       |
-| Points restant à valider (§19)                                                | Le binôme, ou le formateur pour R11    | Décision consignée dans un nouvel ADR et dans le compte rendu du jour (§16.1)         |
+| Décision déjà arbitrée par le cahier des charges (F*, B*, R*)                 | Le binôme applique                     | L'ADR traduit la décision et expose ses conséquences, sans la remettre en cause       |
+| Points restant à valider (§19)                                                | Le binôme                             | Décision consignée dans un nouvel ADR et dans le compte rendu du jour (§16.1)         |
 | Priorisation, périmètre, critères d'acceptation                               | Le binôme dans son rôle de PO (F8)     | Ne relève pas d'un ADR, mais du backlog et du compte rendu                            |
 
-Le formateur ne joue pas le rôle de PO (F8) : il ne tranche pas les arbitrages de périmètre, mais il impose les règles pédagogiques (F*) rappelées au §0.1. Un désaccord entre les deux membres se règle par la discussion, puis par la modification du cahier des charges **avant** de toucher à un ADR.
+Le binôme porte le rôle de PO (F8) : il tranche les arbitrages de périmètre, dans le cadre des décisions de cadrage (F*) rappelées au §0.1, prises selon le REAC. Un désaccord entre les deux membres se règle par la discussion, puis par la modification du cahier des charges **avant** de toucher à un ADR.
 
 ## Lien avec les tickets
 

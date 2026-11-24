@@ -84,5 +84,5 @@ La déclinaison **EN** porte sur le parcours d'achat complet (E01 → E08), qui 
 | Revue persona (§5) | 📝 grille prête dans [revue-persona.md](revue-persona.md) · ⏳ à faire à deux |
 
 Choix de conception :
-- Les composants SDS (bouton, champ, liste déroulante, case à cocher, recherche) et ses tokens de couleur et de typographie (Inter) sont réutilisés, pour avoir des contrastes déjà vérifiés et rester cohérent.
+- Les composants SDS (bouton, champ, liste déroulante, case à cocher, recherche) et ses tokens de couleur et de typographie (Inter) sont réutilisés pour rester cohérent ; ses tokens visent le niveau AA, mais les contrastes restent **à mesurer** écran par écran lors de la revue persona (P3, étape 5).
 - Le plan Figma Starter limite le fichier à 3 pages : la version mobile et la version EN iront dans des sections de la page Front-office.
