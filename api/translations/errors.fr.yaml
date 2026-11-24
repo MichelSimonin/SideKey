@@ -1,0 +1,14 @@
+# Messages d'erreur de l'API (contrat : docs/architecture/architecture-couches.md §4).
+# Génériques : aucune information technique ni énumération de ressources.
+error:
+    bad_request: 'La requête est invalide.'
+    unauthorized: 'Authentification requise.'
+    forbidden: 'Accès refusé.'
+    not_found: 'Ressource introuvable.'
+    method_not_allowed: 'Méthode non autorisée pour cette ressource.'
+    not_acceptable: 'Format de réponse non disponible.'
+    conflict: "La ressource a été modifiée entre-temps ou n'est plus disponible."
+    unsupported_media_type: "Format de la requête non pris en charge."
+    unprocessable: 'Certaines données sont invalides.'
+    too_many_requests: 'Trop de tentatives. Réessayez plus tard.'
+    internal: 'Erreur interne.'

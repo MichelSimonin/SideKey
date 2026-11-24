@@ -1,0 +1,23 @@
+{
+  "skipLink": "Skip to content",
+  "header": {
+    "home": "SideKey, back to home",
+    "language": {
+      "label": "Language",
+      "fr": "Français",
+      "en": "English"
+    }
+  },
+  "home": {
+    "title": "Your game keys, delivered instantly",
+    "subtitle": "Buy a key and see it as soon as you pay. No key is ever sold twice."
+  },
+  "footer": {
+    "copyright": "© SideKey — CDA training project",
+    "securePayment": "Secure payment",
+    "euHosting": "Data hosted in the EU",
+    "legal": "Legal notice",
+    "privacy": "Privacy",
+    "a11y": "Accessibility: partially compliant"
+  }
+}

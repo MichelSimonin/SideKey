@@ -1,0 +1,6 @@
+# Symfony Translation (F-02, CDC §12.4) : français par défaut, anglais.
+framework:
+    default_locale: fr
+    translator:
+        default_path: '%kernel.project_dir%/translations'
+        fallbacks: [fr]

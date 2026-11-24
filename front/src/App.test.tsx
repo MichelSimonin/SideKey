@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from './App'
 
@@ -9,12 +8,12 @@ describe('App', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
   })
 
-  it('incrémente le compteur au clic', async () => {
+  it('expose les repères de page et le lien d’évitement (RGAA 12)', () => {
     render(<App />)
-    const button = screen.getByRole('button', { name: /count is 0/i })
 
-    await userEvent.click(button)
-
-    expect(screen.getByRole('button', { name: /count is 1/i })).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'contenu')
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Aller au contenu' })).toHaveAttribute('href', '#contenu')
   })
 })
