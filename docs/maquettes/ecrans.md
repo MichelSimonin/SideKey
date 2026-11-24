@@ -57,6 +57,8 @@ Tous les besoins utilisateurs du §3 sont couverts par au moins un écran. BX-19
 
 ## 5. Revue persona (à faire à deux sur les maquettes)
 
+Grille détaillée à remplir : [revue-persona.md](revue-persona.md).
+
 Parcourir les maquettes avec le scénario de chaque persona et cocher.
 
 - [ ] **Léa (P1), mobile** : accueil → recherche d'un jeu Steam → fiche → panier → connexion → récapitulatif → paiement refusé puis accepté → révélation de la clé.
@@ -77,9 +79,9 @@ La déclinaison **EN** porte sur le parcours d'achat complet (E01 → E08), qui 
 | Composants SideKey (en-tête FR/EN, pied de page FR/EN, carte jeu, badge PEGI, étapes du tunnel, bandeau paiement fictif FR/EN, menu admin) sur les tokens du Simple Design System | ✅ fait |
 | E01–E10 desktop FR | ✅ fait |
 | E11–E16 desktop FR | ✅ fait |
-| Mobile 375 px : E02, E03, E04, E07 | ⏳ à faire |
-| Parcours EN E01 → E08 (dupliquer les écrans FR, passer l'en-tête, le pied de page et le bandeau en variante `Langue=EN`, traduire les textes) | ⏳ à faire |
-| Revue persona (§5) | ⏳ à faire à deux |
+| Mobile 375 px : E02, E03, E04, E07 | 📝 spécifié dans [mobile.md](mobile.md) · ⏳ à dessiner dans Figma |
+| Parcours EN E01 → E08 (dupliquer les écrans FR, passer l'en-tête, le pied de page et le bandeau en variante `Langue=EN`, traduire les textes) | 📝 textes prêts dans [traduction-en.md](traduction-en.md) · ⏳ à dessiner dans Figma |
+| Revue persona (§5) | 📝 grille prête dans [revue-persona.md](revue-persona.md) · ⏳ à faire à deux |
 
 Choix de conception :
 - Les composants SDS (bouton, champ, liste déroulante, case à cocher, recherche) et ses tokens de couleur et de typographie (Inter) sont réutilisés, pour avoir des contrastes déjà vérifiés et rester cohérent.
