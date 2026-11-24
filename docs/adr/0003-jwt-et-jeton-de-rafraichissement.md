@@ -42,7 +42,7 @@ L'API délivre deux jetons. Le **jeton d'accès** est un JWT signé (RS256 ou ES
 
 **CSRF.** Les routes qui exigent `Authorization` ne sont pas exposées, le navigateur n'ajoutant pas cet en-tête automatiquement. `/api/token/refresh` est la seule route à cookie : elle est protégée par `SameSite=Strict`, une vérification de l'en-tête `Origin` et un jeton CSRF en double soumission.
 
-**Mots de passe et A2F.** Hachage **argon2id**, **12 caractères** minimum et 128 maximum, tous les caractères acceptés, pas d'expiration forcée, limitation de débit `rl:login:{ip}` sur **15 min**. L'A2F est **TOTP** avec **10 codes de secours** à usage unique et hachés : **obligatoire** pour les rôles GESTIONNAIRE, MODERATEUR et ADMIN, **facultative** pour les clients. La connexion se fait en deux étapes, avec un jeton intermédiaire qui ne donne accès qu'à la saisie du code.
+**Mots de passe et A2F.** Hachage **argon2id**, **12 caractères** minimum et 128 maximum, tous les caractères acceptés, pas d'expiration forcée, limitation de débit `rl:login:{ip}` sur **15 min**. L'A2F est **TOTP** avec **10 codes de secours** à usage unique et hachés, régénérés en bloc à chaque activation de l'A2F (les anciens sont supprimés) : **obligatoire** pour les rôles GESTIONNAIRE, MODERATEUR et ADMIN, **facultative** pour les clients. La connexion se fait en deux étapes, avec un jeton intermédiaire qui ne donne accès qu'à la saisie du code.
 
 ## Conséquences
 

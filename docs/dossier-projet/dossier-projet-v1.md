@@ -8,7 +8,7 @@
 | Activité type couverte | **AT2** — Concevoir et développer une application sécurisée organisée en couches · **AT3** (partie DevOps : CI/CD) |
 | Projet | SideKey, projet de formation en binôme (MSP) |
 | Auteurs | [Michel Simonin] · [Benjamin Nativel] |
-| Version du dossier | **v1 — 24/11/2026** (première version, rédigée en cours de projet ; mise à jour le 24/11 : PR #40 et vérification de la conception C-03) |
+| Version du dossier | **v1 — 24/11/2026** (première version, rédigée en cours de projet ; mises à jour le 24/11 : PR #40, vérification de la conception C-03 et décisions sur le modèle de données) |
 | Dépôt | `MichelSimonin/SideKey` sur GitHub |
 
 > **Comment lire cette version.** Le dossier est rédigé au fil du projet, comme le prévoit la définition de « terminé » du backlog. Chaque section porte un état :
@@ -162,6 +162,7 @@ Règles d'attribution du pool : le premier membre libre prend la feature la mieu
 | #38 | Modélisation des données, architecture, 8 ADR, analyse DICP | C-03 (#4, fermée) |
 | #39 | Inventaire des écrans, enchaînement, maquettes Figma desktop | C-02 (#3) |
 | #40 | Préparation du mobile et de l'anglais : textes FR → EN de E01 à E08, spécification mobile, grille de revue persona | C-02 (#3) |
+| #41 | Première version du dossier de projet ; décisions de cadrage reformulées en choix du binôme selon le REAC | L-03 (#34) |
 
 > ⏳ Les comptes rendus quotidiens (`docs/cr/AAAA-MM-JJ.md`) prévus au CDC §16.1 ne sont pas encore tenus : à démarrer pour alimenter ce paragraphe.
 
@@ -256,7 +257,7 @@ Chaque couche ne dépend que de la couche inférieure ; les règles de dépendan
 
 > ⏳ T-01 (schéma, rôles, jeu d'essai, sauvegarde) et T-02 (PL/pgSQL) ne sont pas encore livrés. Ajouter ici les scripts réels et la preuve de restauration.
 
-### 6.5 Validation de la conception (C-03) 🟡
+### 6.5 Validation de la conception (C-03) ✅
 
 La conception (issue C-03, #4) a été livrée par la PR #38, relue et approuvée, CI verte. Ses critères d'acceptation ont été revérifiés dans le dépôt le 24/11/2026 :
 
@@ -268,14 +269,16 @@ La conception (issue C-03, #4) a été livrée par la PR #38, relue et approuvé
 | ADR des choix structurants | ✅ 8 ADR au statut « Accepté » (Symfony + React, PostgreSQL + Redis, JWT, chiffrement, hébergement UE, couches, PlantUML, paiement simulé) |
 | DICP et patrons de sécurité | ✅ [dicp.md](../securite/dicp.md), [security-patterns.md](../securite/security-patterns.md) |
 
-**Reste à trancher par le binôme** (modèle de données, [§7](../architecture/modele-donnees.md)) :
+**Décisions prises par le binôme le 24/11/2026** sur les points restés ouverts (détail : [modèle de données §7](../architecture/modele-donnees.md)) :
 
-| # | Point | Proposition |
+| # | Point | Décision |
 |---|---|---|
-| 1 | Langue d'un avis | Copiée de la langue de l'utilisateur à la création (traçabilité) |
-| 2 | Langue de la commande | Conservée : le client peut changer de langue après la commande |
-| 3 | Purge du journal d'audit au-delà de 12 mois | Tâche planifiée en v2 (RGPD : 6 mois à 1 an) |
-| 4 | Codes de secours A2F | Les 10 codes sont régénérés à chaque activation de l'A2F |
+| 1 | Langue d'un avis | Détectée automatiquement à partir du commentaire, côté serveur et sans service externe ; à défaut, langue de l'utilisateur (P-01) |
+| 2 | Langue de la commande | Conservée : langue au moment de l'achat, utilisée pour l'e-mail et la preuve (F-06) |
+| 3 | Purge du journal d'audit | Conservation 12 mois (RGPD, recommandation CNIL) ; purge automatisée en v2 |
+| 4 | Codes de secours A2F | 10 codes régénérés en bloc à chaque activation de l'A2F, anciens supprimés (F-04) |
+
+Aucune de ces décisions ne change la structure des tables : T-01 peut démarrer.
 
 Les points de la définition de terminé liés au code (tests, FR / EN, validation par couche, déploiement en recette) ne s'appliquent pas à un ticket de conception.
 
@@ -521,7 +524,7 @@ Gabarit :
 | Domaine | Livré | Preuve |
 |---|---|---|
 | Expression des besoins | CDC v1.2, 7 personas, 24 besoins, user stories MoSCoW, règles de gestion | [CDC](../cahier_des_charges_v1.2_SideKey.md) |
-| Gestion de projet | Backlog de 36 éléments dans GitHub Projects, conventions Git, branches par tâche, PR relues | Issues #1–#36, PR #37–#40 |
+| Gestion de projet | Backlog de 36 éléments dans GitHub Projects, conventions Git, branches par tâche, PR relues | Issues #1–#36, PR #37–#41 |
 | Maquettes | 16 écrans desktop FR dans Figma, composants FR / EN, inventaire, enchaînement ; textes FR → EN de E01 à E08, spécification mobile, grille de revue persona | [docs/maquettes](../maquettes/ecrans.md) |
 | Conception | 8 ADR, 17 diagrammes PlantUML, architecture en couches, MCD / MLD / MPD commentés ; C-03 fermée, critères revérifiés (§6.5) | [docs/adr](../adr/README.md), [docs/uml](../uml/README.md), [docs/architecture](../architecture/README.md) |
 | Sécurité (conception) | Analyse DICP, patrons de sécurité, mapping OWASP | [docs/securite](../securite/README.md) |
@@ -533,7 +536,6 @@ Gabarit :
 | Domaine | Reste à faire | Ticket |
 |---|---|---|
 | Maquettes | Mobile (E02, E03, E04, E07), parcours EN (E01 → E08), revue persona | C-02 (#3) |
-| Modèle de données | Trancher les 4 points ouverts (§6.5) | C-03 (#4) |
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | Base de données | Schéma réel (migrations), rôles SGBD, jeu d'essai, sauvegarde et restauration | T-01 (#5) |
 | PL/pgSQL | Fonctions et triggers défensifs | T-02 (#8) |
@@ -548,7 +550,7 @@ Gabarit :
 - **Planning** : les features métier (F-01 à F-10) n'ont pas commencé, alors que le socle et la conception sont faits ; c'est la priorité absolue pour la suite.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
 - **Dossier individuel** : les §4.3, §10, §11 et §12 doivent être personnalisés par chaque candidat.
-- **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle ne sera vraie qu'à la fusion de cette version du dossier (L-03).
+- **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle est devenue vraie avec la fusion de la PR #41.
 
 ---
 

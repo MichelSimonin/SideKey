@@ -274,11 +274,14 @@ MPD.
 
 ---
 
-## 7. Points à trancher en revue
+## 7. Décisions de revue (24/11/2026)
 
-| # | Point | Proposition |
-|---|---|---|
-| 1 | `Avis` : langue de l'avis déduite de l'utilisateur ou choisie ? | copiée de `utilisateur.langue_code` à la création (traçabilité) |
-| 2 | Faut-il conserver `commande.langue_code` si `utilisateur.langue_code` existe ? | oui : le client peut changer de langue après la commande |
-| 3 | Purge du `journal_audit` au-delà de 12 mois ? | tâche planifiée en v2 (RGPD §12.1 : 6 mois à 1 an) |
-| 4 | `code_secours` : régénération en bloc | régénérer les 10 codes à chaque activation d'A2F |
+Les quatre points restés ouverts après la revue de conception ont été tranchés par le binôme.
+Aucun ne modifie la structure des tables : MCD, MLD et MPD restent valables.
+
+| # | Point | Décision | Mise en œuvre |
+|---|---|---|---|
+| 1 | Langue d'un `avis` | **Détectée automatiquement** à partir du texte du commentaire, côté serveur, à la création. Si la détection n'est pas assez fiable (texte court, langue autre que FR / EN), on retient `utilisateur.langue_code`. La langue est figée ensuite et affichée au modérateur | P-01 : service de détection exécuté localement (aucun envoi du commentaire à un service externe, RGPD), limité aux langues de la table `langue` |
+| 2 | `commande.langue_code` alors que `utilisateur.langue_code` existe | **Conservée** : c'est la langue au moment de la commande (e-mail de confirmation, preuve de la vente), qui ne doit pas changer si le client change de langue ensuite. Ce n'est pas une redondance : la valeur peut légitimement différer de celle du profil | F-06 : copiée de la langue de la requête à la création de la commande |
+| 3 | Purge du `journal_audit` | Durée de conservation fixée à **12 mois** (CDC §12.1 : 6 mois à 1 an, recommandation CNIL). **Purge automatisée en v2**, hors périmètre v1 | v2 : le trigger `trg_journal_audit_immuable` interdit aujourd'hui tout DELETE ; la purge devra être conçue avec lui (par exemple partitionnement mensuel et suppression des partitions anciennes par `sk_owner`). `sk_app` reste sans droit DELETE |
+| 4 | `code_secours` | **10 codes générés en bloc à chaque activation de l'A2F** ; les anciens codes de l'utilisateur sont supprimés dans la même transaction. Usage unique, stockés hachés | F-04 |
