@@ -207,10 +207,38 @@ code), préfixes `pk_`, `fk_`, `uq_`, `ck_`, `ix_`, `trg_`, `fn_`, colonnes `cre
 
 ### 4.5 Rôles PostgreSQL (CDC §9.5)
 
-`sk_owner` (DDL, migrations) · `sk_app` (DML, sans `DELETE` sur `cle_licence`,
-`commande`, `paiement`, `journal_audit`) · `sk_reporting` (`SELECT` sur vues) ·
-`sk_backup` (`pg_read_all_data`). Authentification `scram-sha-256`, réseau Docker
-interne uniquement.
+Fichiers : `api/sql/roles/01_roles.sql` (comptes) et `02_privileges.sql` (GRANT / REVOKE, annulable par `02_privileges.down.sql`).
+Authentification `scram-sha-256`, réseau Docker interne uniquement. `PUBLIC` n'a aucun droit sur la base ni sur le schéma.
+
+| Compte | Usage | Droits |
+|---|---|---|
+| `sk_owner` | migrations (DDL) | propriétaire de tous les objets et du schéma `public` |
+| `sk_app` | API Symfony | `SELECT` seul sur `langue`, `role`, `plateforme` ; DML complet sur les tables courantes ; `SELECT`/`INSERT`/`UPDATE` **sans `DELETE`** sur `cle_licence`, `commande`, `paiement` ; `SELECT`/`INSERT` seuls sur `journal_audit` et `commande_historique` ; `EXECUTE` sur les futures fonctions `fn_*` |
+| `sk_reporting` | tableaux de bord | `SELECT` sur `v_ventes_jour` et `v_stock_disponible` uniquement (aucune donnée personnelle, aucune clé), lecture seule par défaut |
+| `sk_backup` | sauvegardes | `pg_read_all_data` (lecture seule) |
+
+Écart assumé par rapport au CDC : `journal_audit` et `commande_historique` sont en **ajout seul** (pas d'`UPDATE`), pour garantir leur valeur de preuve.
+Les mots de passe viennent des variables `SK_OWNER_PASSWORD`, `SK_APP_PASSWORD`, `SK_REPORTING_PASSWORD`, `SK_BACKUP_PASSWORD`
+(valeur de développement : `change_me_dev`, à remplacer en recette et en production).
+
+### 4.6 Jeu d'essai (base `sidekey_test`)
+
+`api/sql/seed/01_jeu_essai.sql`, chargé par `make db-seed` (recrée la base, applique le schéma, charge le jeu d'essai).
+Données **fictives** : 40 jeux FR/EN, 60 offres, 500 clés (faux octets, empreintes SHA-256), 20 utilisateurs, 18 commandes dans les 6 statuts,
+25 avis dans les 3 états de modération, journal d'audit. Mot de passe de tous les comptes d'essai : `SideKey-Dev-2026!`.
+Cas limites : dernière clé disponible, offre en rupture, compte désactivé, e-mail non vérifié, compte de moins de 24 h, A2F active,
+accents, apostrophes, avis de 1000 caractères. Le script refuse de s'exécuter sur une base dont le nom ne contient pas `test` ou `dev`.
+Contrôlé par `api/tests/Database/40_seed_test.sql`.
+
+### 4.7 Sauvegarde et restauration
+
+- **Sauvegarde** : `PGUSER=sk_backup sh api/sql/backup/backup.sh [dossier]` produit `base_AAAAMMJJTHHMMSSZ.dump` (`pg_dump -Fc`, droits `0600`, archive vérifiée
+  par `pg_restore --list`). `SK_BACKUP_KEEP=N` conserve les N dernières. Les clés de licence restent **chiffrées** dans l'archive ; la clé de chiffrement
+  (gestionnaire de secrets) se sauvegarde séparément.
+- **Restauration** : `sh api/sql/backup/restore.sh fichier.dump base_cible` (vide la base cible avant, propriétaire `sk_owner`, droits rétablis).
+  Procédure de reprise : créer la base vide, appliquer `01_roles.sql` si les comptes n'existent pas, restaurer, puis vérifier avec `make db-test`.
+- **Test automatique** : `api/tests/Database/50_sauvegarde.sh` (dans `make db-test` et en CI) sauvegarde la base chargée, la restaure dans une base vierge
+  et compare le nombre de lignes des 21 tables, le contenu de `cle_licence`, le propriétaire et les droits.
 
 ---
 

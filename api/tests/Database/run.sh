@@ -63,6 +63,10 @@ fi
 
 run_tests "$HERE"/[4-9][0-9]_*_test.sql
 
+if [ -f "$HERE/50_sauvegarde.sh" ]; then
+    sh "$HERE/50_sauvegarde.sh"
+fi
+
 echo "== Annulation des migrations (fichiers .down.sql)"
 for f in $(ls "$SQL_DIR"/schema/*.down.sql | sort -r); do
     echo "-> $(basename "$f")"
