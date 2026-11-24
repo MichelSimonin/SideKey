@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { apiUrl, fetchHealth } from './client'
+import { apiHeaders, apiUrl, fetchHealth } from './client'
 
 describe('apiUrl', () => {
   it('joint la base et le chemin sans double slash', () => {
@@ -24,5 +24,17 @@ describe('fetchHealth', () => {
     const fetchFn = vi.fn().mockResolvedValue(new Response('', { status: 503 }))
 
     await expect(fetchHealth(fetchFn)).rejects.toThrow('HTTP 503')
+  })
+})
+
+describe('apiHeaders', () => {
+  it('transmet la langue de la page dans Accept-Language', () => {
+    document.documentElement.lang = 'en'
+
+    expect(apiHeaders()).toEqual({ Accept: 'application/json', 'Accept-Language': 'en' })
+  })
+
+  it('accepte une langue explicite', () => {
+    expect(apiHeaders('fr')['Accept-Language']).toBe('fr')
   })
 })

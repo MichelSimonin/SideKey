@@ -2,6 +2,12 @@
 framework:
     secret: '%env(APP_SECRET)%'
 
+    # Langue de la requête (F-02, CDC §12.4) : en-tête Accept-Language limité aux
+    # langues gérées, sinon français. La réponse indique sa langue (Content-Language).
+    enabled_locales: [fr, en]
+    set_locale_from_accept_language: true
+    set_content_language_from_locale: true
+
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 

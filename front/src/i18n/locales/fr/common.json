@@ -1,0 +1,23 @@
+{
+  "skipLink": "Aller au contenu",
+  "header": {
+    "home": "SideKey, retour à l'accueil",
+    "language": {
+      "label": "Langue",
+      "fr": "Français",
+      "en": "English"
+    }
+  },
+  "home": {
+    "title": "Vos clés de jeux, livrées tout de suite",
+    "subtitle": "Achetez une clé, elle s'affiche dès le paiement. Aucune clé n'est vendue deux fois."
+  },
+  "footer": {
+    "copyright": "© SideKey — projet de formation CDA",
+    "securePayment": "Paiement sécurisé",
+    "euHosting": "Données hébergées dans l'UE",
+    "legal": "Mentions légales",
+    "privacy": "Données personnelles",
+    "a11y": "Accessibilité : partiellement conforme"
+  }
+}

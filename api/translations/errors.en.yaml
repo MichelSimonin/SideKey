@@ -1,0 +1,13 @@
+# API error messages (contract: docs/architecture/architecture-couches.md §4).
+error:
+    bad_request: 'The request is invalid.'
+    unauthorized: 'Authentication required.'
+    forbidden: 'Access denied.'
+    not_found: 'Resource not found.'
+    method_not_allowed: 'Method not allowed for this resource.'
+    not_acceptable: 'Response format not available.'
+    conflict: 'The resource was changed in the meantime or is no longer available.'
+    unsupported_media_type: 'Request format not supported.'
+    unprocessable: 'Some data is invalid.'
+    too_many_requests: 'Too many attempts. Please try again later.'
+    internal: 'Internal error.'
