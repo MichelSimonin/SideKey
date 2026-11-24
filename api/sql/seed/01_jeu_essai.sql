@@ -208,7 +208,7 @@ BEGIN
     END LOOP;
 
     -- ===== Avis (25) : 15 publiés, 6 en attente, 4 refusés =============================
-    long_avis := repeat('Très bon jeu, l''histoire est prenante et la bande-son éblouissante. ', 14);
+    long_avis := repeat('Très bon jeu, l''histoire est prenante et la bande-son éblouissante. ', 20);
     long_avis := left(long_avis, 1000);                     -- longueur maximale autorisée
     FOR i IN 1..25 LOOP
         INSERT INTO avis (note, commentaire, statut_moderation, motif_refus, utilisateur_id, jeu_id, langue_code, cree_le)

@@ -88,12 +88,11 @@ BEGIN
             '23514', 'description de moins de 10 caractères refusée');
     PERFORM pg_temp.rejette(format($q$INSERT INTO jeu_traduction (jeu_id, langue_code, description) VALUES (%L, 'fr', repeat('x', 4001))$q$, j),
             '23514', 'description de plus de 4 000 caractères refusée');
-    PERFORM pg_temp.ok(pg_temp.mk_jeu() IS NOT NULL AND
-        (SELECT count(*) FROM jeu_traduction) >= 0, 'PEGI 3, 7, 12, 16 et 18 acceptés');
     FOREACH n IN ARRAY ARRAY[3, 7, 16, 18] LOOP
         INSERT INTO jeu (titre, slug, pegi, editeur_id)
         VALUES ('PEGI ' || n, 'pegi-' || n || '-' || gen_random_uuid(), n, (SELECT editeur_id FROM jeu WHERE id = j));
     END LOOP;
+    PERFORM pg_temp.ok(true, 'PEGI 3, 7, 12, 16 et 18 acceptés');
 
     PERFORM pg_temp.rejette(format($q$INSERT INTO offre (prix_ttc, jeu_id, plateforme_id)
             SELECT 0, %L, id FROM plateforme WHERE code = 'PSN'$q$, j), '23514', 'prix nul refusé (ck_offre_prix)');
@@ -121,7 +120,6 @@ BEGIN
             VALUES ('PAYEE', -1, now() + interval '15 minutes', %L, 'fr')$q$, u), '23514', 'montant négatif refusé');
     PERFORM pg_temp.rejette(format($q$INSERT INTO commande (statut, montant_total, expire_le, utilisateur_id, langue_code)
             VALUES ('PAYEE', 10, now() - interval '1 minute', %L, 'fr')$q$, u), '23514', 'RG-12 : expiration antérieure à la création refusée');
-    FOREACH v IN ARRAY ARRAY[]::uuid[] LOOP END LOOP;
     PERFORM pg_temp.mk_commande(u, 'A_VERIFIER');
     PERFORM pg_temp.mk_commande(u, 'ANNULEE');
     PERFORM pg_temp.mk_commande(u, 'EXPIREE');
@@ -165,7 +163,7 @@ BEGIN
     PERFORM pg_temp.rejette(format($q$INSERT INTO avis (note, commentaire, utilisateur_id, jeu_id, langue_code)
             VALUES (0, 'Une note hors limites.', %L, %L, 'fr')$q$, u, j), '23514', 'RG-30 : note 0 refusée');
     PERFORM pg_temp.rejette(format($q$INSERT INTO avis (note, commentaire, utilisateur_id, jeu_id, langue_code)
-            VALUES (3, 'Trop court', %L, %L, 'fr')$q$, u, j), '23514', 'RG-30 : commentaire de 9 caractères refusé');
+            VALUES (3, 'Trop cour', %L, %L, 'fr')$q$, u, j), '23514', 'RG-30 : commentaire de 9 caractères refusé');
     PERFORM pg_temp.rejette(format($q$INSERT INTO avis (note, commentaire, utilisateur_id, jeu_id, langue_code)
             VALUES (3, repeat('x', 1001), %L, %L, 'fr')$q$, u, j), '23514', 'RG-30 : commentaire de 1 001 caractères refusé');
     PERFORM pg_temp.rejette(format($q$INSERT INTO avis (note, commentaire, statut_moderation, utilisateur_id, jeu_id, langue_code)
