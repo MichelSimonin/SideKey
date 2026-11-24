@@ -6,12 +6,12 @@
 | Projet | **SideKey** |
 | Contexte | Projet de formation en binôme — Titre professionnel CDA (REAC TP-01281 v04 du 24/05/2023) |
 | Blocs visés | **Activité type 2** — Concevoir et développer une application sécurisée organisée en couches · **Activité type 3** (partie DevOps : CI/CD) |
-| Version | 1.2 — intègre les décisions du formateur et du binôme du 23/11/2026 (deux séries) |
+| Version | 1.2 — intègre les décisions de cadrage et de conception du binôme du 23/11/2026 (deux séries) |
 | Date | 23/11/2026 |
 | Durée | **2 à 3 semaines**, soutenances orales des groupes en semaine 3 |
 | Auteurs | [Prénom NOM 1] · [Prénom NOM 2] |
 
-> **Règle directrice (formateur)** : chaque outil et chaque technologie doit être **justifié par un besoin identifié**, exprimé par un **persona** (§3). La matrice de justification est au §8.
+> **Règle directrice (choix du binôme, conforme au REAC)** : chaque outil et chaque technologie doit être **justifié par un besoin identifié**, exprimé par un **persona** (§3). La matrice de justification est au §8.
 
 > Les éléments marqués **[À valider]** restent à trancher. La liste complète est au §19.
 
@@ -45,21 +45,21 @@
 
 ## 0. Journal des décisions
 
-### 0.1 Décisions du formateur
+### 0.1 Décisions de cadrage (prises par le binôme selon le REAC)
 | # | Sujet | Décision | Impact dans le document |
 |---|---|---|---|
-| F1 | Sujet et périmètre pour l'activité type 2 | ✅ Validé | — |
-| F2 | Évaluation en binôme | ✅ Gestion du projet **par feature** | §16.3 |
+| F1 | Sujet et périmètre pour l'activité type 2 | ✅ SideKey couvre les compétences de l'activité type 2 (grille du §2) | §2 |
+| F2 | Organisation en binôme | ✅ Gestion du projet **par feature** | §16.3 |
 | F3 | Produits vendus | ✅ **Clés de licence uniquement** (pas d'occasion) | Stock physique, adresses, expédition et frais de port supprimés |
-| F4 | NoSQL | ❓ Question du formateur : « y a-t-il une autre base déjà précisée ? » → réponse au §9.8 : **PostgreSQL (SQL) + Redis (NoSQL clé/valeur)**. MongoDB n'était qu'une option. | Proposition : **Redis seul**, à confirmer |
+| F4 | NoSQL | ✅ **PostgreSQL (SQL) + Redis (NoSQL clé/valeur)**, conformément au « format clé/valeur » cité par le REAC ; MongoDB n'était qu'une option | §9.8, confirmé par R1 |
 | F5 | Activité type 3 | ✅ **CI/CD à prévoir** (partie DevOps) | Nouveau §15 |
-| F6 | Contraintes techniques | ✅ Aucune, mais **chaque outil doit être justifiable** et répondre à un besoin exprimé par des **personas fictifs** | Nouveaux §3 et §8.3 |
+| F6 | Justification des choix techniques | ✅ **Chaque outil est justifié** par un besoin exprimé par des **personas fictifs** ou par un attendu du REAC | Nouveaux §3 et §8.3 |
 | F7 | Rythme | ✅ **Sprints journaliers** | §16.1, §16.4 |
-| F8 | Formateur dans le rôle du PO / client | ❌ Non : le binôme porte le rôle de PO, les personas servent de voix de l'utilisateur | §16.1 |
+| F8 | Rôle du PO / client | ✅ Porté par le binôme ; les personas servent de voix de l'utilisateur | §16.1 |
 | F9 | Livrables officiels | ✅ **Dossier de projet, projet (code), diaporama** | §17 |
 | F10 | Langues | ✅ **Application multilingue FR + EN uniquement** | §12.4 |
-| F11 | Exigences RGAA et éco-conception | ✅ Validé | §12 |
-| F12 | Paiement simulé | ✅ Validé, **à justifier** (un faux système de paiement suffit en v1) | §11.6 |
+| F11 | Exigences RGAA et éco-conception | ✅ Intégrées au projet (attendus du REAC, compétences 5 et 6) | §12 |
+| F12 | Paiement simulé | ✅ Paiement **simulé** en v1, **justifié** au §11.6 | §11.6 |
 
 ### 0.2 Décisions du binôme
 | # | Sujet | Décision | Impact |
@@ -611,7 +611,7 @@ Ces objets sont livrés dans les **migrations Doctrine** (SQL brut versionné).
 - **Restauration** `pg_restore --clean` (`infra/restore.sh`), démontrée en soutenance (BX-19).
 
 ### 9.8 NoSQL : Redis (réponse à la question F4)
-**Réponse au formateur** : le projet précise déjà deux bases. **PostgreSQL** est la base relationnelle de référence. **Redis** est la base NoSQL de type clé/valeur. MongoDB n'était proposé qu'en option pour les avis. Comme le périmètre est limité aux clés et que le REAC cite explicitement le « format clé/valeur », **Redis seul a été retenu** (décision R1).
+**Choix de la base NoSQL** : le projet utilise deux bases. **PostgreSQL** est la base relationnelle de référence. **Redis** est la base NoSQL de type clé/valeur. MongoDB n'était proposé qu'en option pour les avis. Comme le périmètre est limité aux clés et que le REAC cite explicitement le « format clé/valeur », **Redis seul a été retenu** (décision R1).
 
 | Usage | Clé | Type | TTL | Besoin |
 |---|---|---|---|---|
@@ -870,7 +870,7 @@ Contrôles de santé des conteneurs, route `/api/health`, logs JSON centralisés
 ## 16. Organisation du projet
 
 ### 16.1 Méthode : sprints journaliers (décision F7) sur 2 à 3 semaines (R5)
-Le formateur ne joue pas le PO (F8). Le binôme assume ce rôle, et **les personas servent de voix de l'utilisateur** : chaque user story porte son besoin `BX-nn`, et chaque revue vérifie le scénario du persona concerné.
+Le binôme assume le rôle de PO (F8), et **les personas servent de voix de l'utilisateur** : chaque user story porte son besoin `BX-nn`, et chaque revue vérifie le scénario du persona concerné.
 
 | Moment | Durée | Contenu |
 |---|---|---|
@@ -1046,7 +1046,7 @@ Annexes internes, versionnées dans `docs/` et reprises dans L1 : comptes rendus
 | R8 | **Langue des commits** et des issues | Binôme | Anglais | §16.5 |
 | R9 | Versions exactes (Symfony LTS, PHP, React, PostgreSQL, Redis) | Binôme | Dernières versions stables ou LTS, figées au J1 | §8.3 |
 | R10 | **Fournisseur** d'hébergement dans l'UE | Binôme | Choisi au J3 : VPS chez un hébergeur européen (prix, données dans l'UE, Docker possible) | §8.3 |
-| R11 | **Date exacte** de passage à l'oral du binôme | Formateur | — | §16.4 |
+| R11 | **Date exacte** de passage à l'oral du binôme | Calendrier de la session | — | §16.4 |
 | R12 | Avis clients déplacés dans le pool (S) à cause du délai : acceptable ? | Binôme | Oui, rang 1 du pool | §5.5, §16.3 |
 
 ## 20. Glossaire
