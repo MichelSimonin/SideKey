@@ -3,7 +3,7 @@ DC = docker compose
 PHP = $(DC) exec php
 
 .DEFAULT_GOAL := help
-.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli test test-api test-front uml clean
+.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli db-migrate db-reset db-test db-seed db-backup db-restore test test-api test-front uml clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -54,6 +54,25 @@ redis-cli: ## Client Redis
 
 clean: ## Arrête et SUPPRIME les données (bases, Redis, node_modules du conteneur)
 	$(DC) down -v
+
+db-migrate: ## Applique le schéma SQL sur la base de dev (base vide)
+	$(PHP) sh sql/bin/db-apply.sh
+
+db-reset: ## Vide la base de dev puis réapplique le schéma (SUPPRIME les données)
+	$(DC) exec database sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public"'
+	$(MAKE) db-migrate
+
+db-test: ## Tests de la base : migrations sur base vide + tests SQL
+	$(PHP) sh tests/Database/run.sh
+
+db-seed: ## Recrée la base sidekey_test (schéma + jeu d'essai). SUPPRIME ses données
+	$(PHP) env PGDATABASE=sidekey_test sh sql/bin/db-seed.sh --reset
+
+db-backup: ## Sauvegarde la base de dev (pg_dump -Fc) dans api/sauvegardes/
+	$(PHP) env PGUSER=sk_backup PGPASSWORD=$${SK_BACKUP_PASSWORD:-change_me_dev} sh sql/backup/backup.sh
+
+db-restore: ## Restaure une sauvegarde : make db-restore FILE=sauvegardes/x.dump DB=sidekey_test (VIDE la base cible)
+	$(PHP) sh sql/backup/restore.sh $(FILE) $(DB)
 
 test: test-api test-front ## Lance tous les tests (API + front)
 

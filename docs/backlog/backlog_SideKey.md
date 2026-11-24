@@ -117,7 +117,7 @@ Migrations Doctrine du schéma, contraintes d'intégrité, comptes PostgreSQL av
 
 - [ ] Migrations appliquées sans erreur sur une base vide
 - [ ] Contraintes : clés primaires et étrangères, CHECK, unicité de l'empreinte des clés
-- [ ] Comptes sk_app (CRUD limité), sk_admin et sk_readonly créés par script, avec GRANT/REVOKE
+- [ ] Comptes sk_owner (migrations), sk_app (CRUD limité), sk_reporting (vues) et sk_backup (sauvegardes) créés par script, avec GRANT/REVOKE
 - [ ] Base sidekey_test et jeu d'essai avec cas limites (dernière clé, compte désactivé, commande annulée)
 - [ ] Sauvegarde pg_dump et restauration testées et documentées
 
@@ -380,10 +380,10 @@ Fusionner le panier invité avec le panier du compte à la connexion, ajouter le
 
 *Pool · priorité C · 1 j · J10+ · dépend de : F-10*
 
-Indicateurs de ventes, lus avec le compte sk_readonly.
+Indicateurs de ventes, lus avec le compte sk_reporting.
 
 - [ ] Ventes par jour et par jeu
-- [ ] Lecture via le compte sk_readonly
+- [ ] Lecture via le compte sk_reporting
 
 ### P-13 — Import asynchrone des clés
 

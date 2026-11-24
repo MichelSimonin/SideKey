@@ -15,6 +15,9 @@ RUN install-php-extensions \
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
+# Client PostgreSQL 17 : scripts de base de données (api/sql/bin, api/tests/Database) et sauvegardes
+RUN apk add --no-cache postgresql17-client
+
 COPY conf.d/app.dev.ini /usr/local/etc/php/conf.d/zz-app.ini
 
 WORKDIR /var/www/api

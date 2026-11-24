@@ -66,7 +66,7 @@
       "acceptance": [
         "Migrations appliquées sans erreur sur une base vide",
         "Contraintes : clés primaires et étrangères, CHECK, unicité de l'empreinte des clés",
-        "Comptes sk_app (CRUD limité), sk_admin et sk_readonly créés par script, avec GRANT/REVOKE",
+        "Comptes sk_owner (migrations), sk_app (CRUD limité), sk_reporting (vues) et sk_backup (sauvegardes) créés par script, avec GRANT/REVOKE",
         "Base sidekey_test et jeu d'essai avec cas limites (dernière clé, compte désactivé, commande annulée)",
         "Sauvegarde pg_dump et restauration testées et documentées"
       ]
@@ -292,8 +292,8 @@
     {
       "id": "P-12", "type": "pool", "title": "Tableau de bord des ventes",
       "attribution": "Pool", "priority": "C", "estimate": 1, "day": "J10+", "milestone": "", "deps": ["F-10"],
-      "description": "Indicateurs de ventes, lus avec le compte sk_readonly.",
-      "acceptance": ["Ventes par jour et par jeu", "Lecture via le compte sk_readonly"]
+      "description": "Indicateurs de ventes, lus avec le compte sk_reporting.",
+      "acceptance": ["Ventes par jour et par jeu", "Lecture via le compte sk_reporting"]
     },
     {
       "id": "P-13", "type": "pool", "title": "Import asynchrone des clés",

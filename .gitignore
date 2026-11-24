@@ -60,3 +60,6 @@ Thumbs.db
 
 # Exception : secret de test factice (convention Symfony), nécessaire à la CI
 !api/.env.test
+
+# Sauvegardes de la base (jamais versionnées)
+/api/sauvegardes/
