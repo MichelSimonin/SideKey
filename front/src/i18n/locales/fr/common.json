@@ -2,6 +2,10 @@
   "skipLink": "Aller au contenu",
   "header": {
     "home": "SideKey, retour à l'accueil",
+    "nav": "Compte",
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "greeting": "Bonjour {{name}}",
     "language": {
       "label": "Langue",
       "fr": "Français",
@@ -19,5 +23,45 @@
     "legal": "Mentions légales",
     "privacy": "Données personnelles",
     "a11y": "Accessibilité : partiellement conforme"
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "text": "Cette page n'existe pas ou a été déplacée.",
+    "back": "Retour à l'accueil"
+  },
+  "auth": {
+    "loading": "Chargement…",
+    "tabs": "Connexion ou création de compte",
+    "login": {
+      "tab": "Connexion",
+      "title": "Connexion",
+      "submit": "Se connecter"
+    },
+    "register": {
+      "tab": "Inscription",
+      "title": "Créer un compte",
+      "submit": "Créer mon compte"
+    },
+    "fields": {
+      "email": "Adresse e-mail",
+      "password": "Mot de passe",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "showPassword": "Afficher le mot de passe",
+      "consent": "J'accepte la politique de confidentialité et le traitement de mes données pour créer mon compte."
+    },
+    "hints": {
+      "passwordRules": "12 à 128 caractères, tous les caractères sont acceptés. Une phrase de passe est recommandée.",
+      "passwordCount": "{{count}} caractère(s) saisi(s)"
+    },
+    "pending": "Veuillez patienter…",
+    "errors": {
+      "summary": "Le formulaire contient des erreurs :",
+      "required": "Ce champ est obligatoire.",
+      "generic": "Une erreur est survenue. Veuillez réessayer.",
+      "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
+      "rateLimited": "Trop de tentatives. Réessayez dans {{minutes}} min."
+    },
+    "secondFactor": "Ce compte est protégé par la double authentification. La saisie du code sera disponible prochainement."
   }
 }

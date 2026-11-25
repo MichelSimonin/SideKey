@@ -1,12 +1,17 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../../App'
 import { LANGUAGE_STORAGE_KEY } from '../../i18n/config'
 
 describe('LanguageSwitcher', () => {
   it('affiche le français par défaut, bouton FR actif', () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Vos clés de jeux, livrées tout de suite')
     expect(screen.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'true')
@@ -15,7 +20,11 @@ describe('LanguageSwitcher', () => {
   })
 
   it("passe l'interface en anglais, met à jour lang et mémorise le choix", async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: 'English' }))
 
@@ -27,10 +36,15 @@ describe('LanguageSwitcher', () => {
   })
 
   it('est utilisable au clavier', async () => {
-    render(<App />)
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>,
+    )
 
     await userEvent.tab() // lien d'évitement
     await userEvent.tab() // logo
+    await userEvent.tab() // lien « Connexion » du compte
     await userEvent.tab() // FR
     await userEvent.tab() // EN
     expect(screen.getByRole('button', { name: 'English' })).toHaveFocus()

@@ -17,6 +17,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Origine HTTPS comme en recette et en production : les cookies Secure (sk_csrf) sont alors lisibles par le script.
+    environmentOptions: { jsdom: { url: 'https://localhost/' } },
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     coverage: {

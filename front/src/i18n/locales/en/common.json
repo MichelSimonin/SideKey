@@ -2,6 +2,10 @@
   "skipLink": "Skip to content",
   "header": {
     "home": "SideKey, back to home",
+    "nav": "Account",
+    "login": "Sign in",
+    "logout": "Sign out",
+    "greeting": "Hello {{name}}",
     "language": {
       "label": "Language",
       "fr": "Français",
@@ -19,5 +23,45 @@
     "legal": "Legal notice",
     "privacy": "Privacy",
     "a11y": "Accessibility: partially compliant"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "This page does not exist or has been moved.",
+    "back": "Back to home"
+  },
+  "auth": {
+    "loading": "Loading…",
+    "tabs": "Sign in or create an account",
+    "login": {
+      "tab": "Sign in",
+      "title": "Sign in",
+      "submit": "Sign in"
+    },
+    "register": {
+      "tab": "Sign up",
+      "title": "Create an account",
+      "submit": "Create my account"
+    },
+    "fields": {
+      "email": "E-mail address",
+      "password": "Password",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "showPassword": "Show password",
+      "consent": "I accept the privacy policy and the processing of my data to create my account."
+    },
+    "hints": {
+      "passwordRules": "12 to 128 characters, all characters are accepted. A passphrase is recommended.",
+      "passwordCount": "{{count}} character(s) entered"
+    },
+    "pending": "Please wait…",
+    "errors": {
+      "summary": "The form contains errors:",
+      "required": "This field is required.",
+      "generic": "Something went wrong. Please try again.",
+      "network": "Unable to reach the server. Check your connection.",
+      "rateLimited": "Too many attempts. Try again in {{minutes}} min."
+    },
+    "secondFactor": "This account is protected by two-factor authentication. Code entry will be available soon."
   }
 }
