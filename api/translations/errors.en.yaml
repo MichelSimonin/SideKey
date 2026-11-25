@@ -17,3 +17,8 @@ error:
     panier_plein: 'Your cart already holds %maximum% different offers.'
     offre_indisponible: 'This offer does not exist or is no longer for sale.'
     commande_non_reservable: 'This order no longer accepts reservations: it has expired or is closed.'
+    # Authentication (F-03): deliberately generic messages (no account enumeration)
+    identifiants_invalides: 'Incorrect e-mail or password.'
+    session_invalide: 'Session expired or invalid. Please sign in again.'
+    email_deja_utilise: 'An account already exists with this e-mail.'
+    mot_de_passe_invalide: 'The password does not meet the security policy (12 to 128 characters).'

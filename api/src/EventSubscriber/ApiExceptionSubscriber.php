@@ -105,6 +105,9 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         if (!\in_array('Accept-Language', $response->getVary(), true)) {
             $response->setVary('Accept-Language', false);
         }
+        if ($exception instanceof ExceptionMetier) {
+            $response->headers->add($exception->entetes());
+        }
         if ($exception instanceof HttpExceptionInterface) {
             foreach (self::FORWARDED_HEADERS as $name) {
                 if (isset($exception->getHeaders()[$name])) {
