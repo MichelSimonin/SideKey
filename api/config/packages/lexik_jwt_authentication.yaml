@@ -1,0 +1,21 @@
+# Jeton d'accès (CDC §11.4, ADR-0003) : JWT signé RS256, 15 minutes, en-tête Authorization: Bearer uniquement.
+# Les clés sont générées en local (make jwt-keys) et ne sont jamais versionnées (config/jwt/*.pem).
+lexik_jwt_authentication:
+    secret_key: '%env(resolve:JWT_SECRET_KEY)%'
+    public_key: '%env(resolve:JWT_PUBLIC_KEY)%'
+    pass_phrase: '%env(JWT_PASSPHRASE)%'
+    # RS256 : clé privée pour signer, clé publique pour vérifier (un futur client ne détient pas la clé privée).
+    # Un jeton « alg: none » ou signé en HS256 avec la clé publique est refusé par le décodeur.
+    token_ttl: 900
+    # « sub » = UUID du compte ; l'utilisateur est relu en base à chaque requête (UtilisateurProvider).
+    user_id_claim: sub
+    # Jeton lu uniquement dans l'en-tête : jamais dans un cookie ni dans l'URL (qui finit dans les journaux).
+    token_extractors:
+        authorization_header:
+            enabled: true
+            prefix: Bearer
+            name: Authorization
+        cookie:
+            enabled: false
+        query_parameter:
+            enabled: false
