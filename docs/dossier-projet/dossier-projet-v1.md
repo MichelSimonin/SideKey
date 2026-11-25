@@ -44,8 +44,8 @@
 |---|---|---|---|
 | **C5** — Analyser les besoins et maquetter une application | 7 personas, besoins BX-01 à BX-24, user stories MoSCoW, maquettes Figma FR (EN en cours), schéma d'enchaînement, exigences RGAA, RGPD et éco-conception | §3, §5 | 🟡 |
 | **C6** — Définir l'architecture logicielle d'une application multicouche répartie | Architecture SPA ↔ API REST en couches ↔ PostgreSQL + Redis, matrice de justification de la stack, 8 ADR, diagrammes de composants et de déploiement, DICP, patrons de conception et de sécurité | §6, §7 | ✅ conception · ⏳ implémentation |
-| **C7** — Concevoir et mettre en place une base de données relationnelle | MCD (20 entités), MLD (21 tables), MPD PostgreSQL 17 ; rôles SGBD, jeu d'essai, sauvegarde et restauration | §6.4 | ✅ conception · ⏳ mise en place (T-01) |
-| **C8** — Développer des composants d'accès aux données SQL et NoSQL | Repositories Doctrine, PL/pgSQL défensif, `FOR UPDATE SKIP LOCKED`, verrouillage optimiste, Redis (panier, réservations, jetons, limitation de débit) | §6.6, §6.7, §8 | ⏳ |
+| **C7** — Concevoir et mettre en place une base de données relationnelle | MCD (20 entités), MLD (21 tables), MPD PostgreSQL 17 ; rôles SGBD, jeu d'essai, sauvegarde et restauration | §6.4, §8.5 | ✅ conception · ✅ schéma, rôles, jeu d'essai (T-01) · ✅ PL/pgSQL (T-02) |
+| **C8** — Développer des composants d'accès aux données SQL et NoSQL | Repositories Doctrine, PL/pgSQL défensif, `FOR UPDATE SKIP LOCKED`, verrouillage optimiste, Redis (panier, réservations, jetons, limitation de débit) | §6.6, §6.7, §8 | 🟡 PL/pgSQL et `SKIP LOCKED` faits (T-02) · ⏳ repositories, Redis |
 | **AT3 (partie DevOps)** — Préparer et automatiser le déploiement | Environnement Docker de développement, CI GitHub Actions bloquante, protection de `main`, CD vers une recette dans l'UE | §4.4, §8.1 | 🟡 CI faite · ⏳ CD (T-04) |
 
 ---
@@ -163,6 +163,10 @@ Règles d'attribution du pool : le premier membre libre prend la feature la mieu
 | #39 | Inventaire des écrans, enchaînement, maquettes Figma desktop | C-02 (#3) |
 | #40 | Préparation du mobile et de l'anglais : textes FR → EN de E01 à E08, spécification mobile, grille de revue persona | C-02 (#3) |
 | #41 | Première version du dossier de projet ; décisions de cadrage reformulées en choix du binôme selon le REAC | L-03 (#34) |
+| #42 | Décisions sur les 4 points ouverts du modèle de données | C-03 (#4) |
+| #43 | Internationalisation FR / EN : react-i18next, sélecteur, `lang`, erreurs de l'API traduites selon `Accept-Language` | F-02 (#7, fermée) |
+| #44 | Schéma PostgreSQL, contraintes, comptes SGBD, jeu d'essai, sauvegarde et restauration | T-01 (#5, fermée) |
+| (en cours) | Fonctions et triggers PL/pgSQL défensifs, test de concurrence sur la dernière clé | T-02 (#8) |
 
 > ⏳ Les comptes rendus quotidiens (`docs/cr/AAAA-MM-JJ.md`) prévus au CDC §16.1 ne sont pas encore tenus : à démarrer pour alimenter ce paragraphe.
 
@@ -247,15 +251,15 @@ Chaque couche ne dépend que de la couche inférieure ; les règles de dépendan
 
 17 diagrammes PlantUML versionnés (`docs/uml/src/`), exportés en PNG et SVG par `make uml` : cas d'utilisation, classes du domaine, états (commande, clé de licence), séquences (achat concurrent, paiement, connexion JWT, révélation de clé, import de clés). Index : [docs/uml](../uml/README.md).
 
-### 6.4 Base de données relationnelle ✅ conception · ⏳ mise en place
+### 6.4 Base de données relationnelle ✅
 
 - **MCD** de 20 entités et 26 associations, **MLD** de 21 tables, **MPD** PostgreSQL 17 avec types, contraintes, index partiels et triggers : [modèle de données commenté](../architecture/modele-donnees.md), [MCD](../uml/exports/mcd.svg), [MLD](../uml/exports/mld.svg), [MPD](../uml/exports/mpd.svg).
 - **Contraintes clés** : empreinte HMAC unique par clé, une seule offre active par couple jeu × plateforme (index unique partiel), `CHECK (quantite BETWEEN 1 AND 10)`, colonne `version` pour le verrouillage optimiste.
 - **Comptes SGBD à moindre privilège** : `sk_owner` (migrations), `sk_app` (API, sans `DELETE` sur les clés, commandes, paiements et audit), `sk_reporting` (lecture de vues sans données personnelles), `sk_backup`.
-- **Objets PL/pgSQL défensifs** prévus : `fn_reserver_cles`, `fn_valider_commande`, `fn_liberer_reservations_expirees`, triggers d'historique, de transitions de statut, de protection des clés vendues et d'immuabilité du journal d'audit.
-- **Jeu d'essai** prévu : 40 jeux FR / EN, 60 offres, 500 clés dans tous les états, 20 utilisateurs de tous rôles, commandes dans chaque statut ; sauvegarde `pg_dump -Fc` et restauration `pg_restore --clean`.
+- **Objets PL/pgSQL défensifs** (T-02) : `fn_reserver_cles`, `fn_valider_commande` (idempotente), `fn_liberer_reservations_expirees` ; triggers de transitions de statut (§6.4 du CDC), d'historique, de protection des clés vendues et d'immuabilité du journal d'audit et de l'historique. Paramètres vérifiés, `SECURITY INVOKER`, `search_path` figé, `EXECUTE` pour `sk_app` seulement, codes d'erreur `SK001` à `SK005` traduits en HTTP 409 par l'API ([modèle de données §4.4](../architecture/modele-donnees.md), extrait §8.5).
+- **Jeu d'essai** (T-01) : 40 jeux FR / EN, 60 offres, 500 clés dans tous les états, 20 utilisateurs de tous rôles, commandes dans chaque statut ; sauvegarde `pg_dump -Fc` et restauration `pg_restore --clean`.
 
-> ⏳ T-01 (schéma, rôles, jeu d'essai, sauvegarde) et T-02 (PL/pgSQL) ne sont pas encore livrés. Ajouter ici les scripts réels et la preuve de restauration.
+- **Preuves automatisées** (job CI « database ») : migrations sur base vide, tests SQL des contraintes, des droits, des fonctions et des triggers (cas d'erreur et cas nominaux), sauvegarde puis restauration comparée table par table, scénario de concurrence à deux sessions, annulation complète des migrations.
 
 ### 6.5 Validation de la conception (C-03) ✅
 
@@ -439,12 +443,37 @@ export async function fetchHealth(fetchFn: typeof fetch = fetch): Promise<Health
 }
 ```
 
-### 8.5 Extraits à ajouter ⏳
+### 8.5 Réserver la dernière clé sans jamais la vendre deux fois (T-02)
+
+Le cœur du scénario de concurrence est en base, dans `fn_reserver_cles` ([source](../../api/sql/functions/001_fonctions.sql)) :
+
+```sql
+SELECT array_agg(id) INTO v_cles FROM (
+    SELECT id FROM cle_licence
+    WHERE offre_id = p_offre AND statut = 'DISPONIBLE'
+    ORDER BY importee_le, id
+    LIMIT p_quantite
+    FOR UPDATE SKIP LOCKED
+) AS libres;
+
+IF coalesce(cardinality(v_cles), 0) < p_quantite THEN
+    RAISE EXCEPTION 'Stock insuffisant pour l''offre % : % demandée(s), % disponible(s)',
+        p_offre, p_quantite, coalesce(cardinality(v_cles), 0)
+        USING ERRCODE = 'SK001';
+END IF;
+```
+
+- `FOR UPDATE` verrouille les clés choisies jusqu'à la fin de la transaction ; `SKIP LOCKED` fait ignorer à un second acheteur les clés déjà verrouillées au lieu de le faire attendre.
+- Tout ou rien : si le stock ne suffit pas, l'exception annule la transaction et aucune clé n'est réservée.
+- Avant cette sélection, la fonction refuse les paramètres absents ou hors bornes, une ligne qui ne correspond pas à l'offre, une commande expirée ou close et une double réservation : chaque cas a son code d'erreur, testé.
+- **Preuve** : `api/tests/Database/60_concurrence.sh` ouvre deux sessions PostgreSQL réelles sur l'offre qui n'a plus qu'une clé. A réserve et garde sa transaction ouverte ; B échoue aussitôt avec `SK001`, sans attendre ; A obtient la clé, et une seule clé est réservée.
+
+Une clé vendue est ensuite protégée par `trg_cle_licence_protection` : toute modification ou suppression lève `SK003`, sauf l'enregistrement de la première révélation par l'acheteur.
+
+### 8.6 Extraits à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
 |---|---|---|
-| `fn_reserver_cles` (PL/pgSQL défensif, `FOR UPDATE SKIP LOCKED`) | T-02, F-06 | C7, C8 |
-| Trigger d'immuabilité de `journal_audit` | T-02 | C7 |
 | Service de chiffrement AES-GCM + empreinte HMAC | F-08 | C8 |
 | Voter de propriété d'une commande (anti-IDOR) | F-03, F-06 | C6 |
 | Panier et réservation dans Redis (TTL) | F-05 | C8 |
@@ -524,12 +553,14 @@ Gabarit :
 | Domaine | Livré | Preuve |
 |---|---|---|
 | Expression des besoins | CDC v1.2, 7 personas, 24 besoins, user stories MoSCoW, règles de gestion | [CDC](../cahier_des_charges_v1.2_SideKey.md) |
-| Gestion de projet | Backlog de 36 éléments dans GitHub Projects, conventions Git, branches par tâche, PR relues | Issues #1–#36, PR #37–#41 |
+| Gestion de projet | Backlog de 36 éléments dans GitHub Projects, conventions Git, branches par tâche, PR relues | Issues #1–#36, PR #37–#44 |
 | Maquettes | 16 écrans desktop FR dans Figma, composants FR / EN, inventaire, enchaînement ; textes FR → EN de E01 à E08, spécification mobile, grille de revue persona | [docs/maquettes](../maquettes/ecrans.md) |
 | Conception | 8 ADR, 17 diagrammes PlantUML, architecture en couches, MCD / MLD / MPD commentés ; C-03 fermée, critères revérifiés (§6.5) | [docs/adr](../adr/README.md), [docs/uml](../uml/README.md), [docs/architecture](../architecture/README.md) |
 | Sécurité (conception) | Analyse DICP, patrons de sécurité, mapping OWASP | [docs/securite](../securite/README.md) |
 | Socle technique | Monorepo Symfony 7.4 / React 19, Docker Compose de dev, Makefile | `compose.yaml`, `Makefile` |
-| CI | Jobs api / front / docker, `ci-success`, `pr-title`, audits bloquants, 11 tests | `.github/workflows/` |
+| CI | Jobs api / front / docker / database, `ci-success`, `pr-title`, audits bloquants | `.github/workflows/` |
+| Base de données | Schéma PostgreSQL (21 tables), contraintes et index, comptes SGBD à moindre privilège, jeu d'essai, sauvegarde et restauration testées (T-01) ; fonctions et triggers défensifs, test de concurrence (T-02) | `api/sql/`, `api/tests/Database/` |
+| Internationalisation | Front FR / EN (sélecteur mémorisé, `lang`, clés typées, parité testée) ; erreurs de l'API traduites selon `Accept-Language` (F-02) | `front/src/i18n/`, `api/translations/` |
 
 ### 13.2 Pas encore fait
 
@@ -537,12 +568,10 @@ Gabarit :
 |---|---|---|
 | Maquettes | Mobile (E02, E03, E04, E07), parcours EN (E01 → E08), revue persona | C-02 (#3) |
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
-| Base de données | Schéma réel (migrations), rôles SGBD, jeu d'essai, sauvegarde et restauration | T-01 (#5) |
-| PL/pgSQL | Fonctions et triggers défensifs | T-02 (#8) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | Catalogue, i18n, authentification, A2F, panier, commande et concurrence, paiement, clés, back-office | F-01 à F-10 |
-| Dossier | Comptes rendus quotidiens, veille (§10), recherche anglophone (§11), extraits métier (§8.5), jeu d'essai (§9.3), captures, bilan | L-03 (#34) |
+| Features | Catalogue, authentification, A2F, panier, commande et concurrence, paiement, clés, back-office | F-01, F-03 à F-10 |
+| Dossier | Comptes rendus quotidiens, veille (§10), recherche anglophone (§11), extraits métier (§8.6), jeu d'essai (§9.3), captures, bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 
 ### 13.3 Points de vigilance

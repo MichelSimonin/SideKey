@@ -5,6 +5,11 @@
 -- (les 6 statuts), 8 codes de secours, 25 avis (3 états), journal d'audit, historique des commandes, imports.
 -- Cas limites : dernière clé disponible, offre en rupture, compte désactivé, e-mail non vérifié, compte de
 -- moins de 24 h, A2F active, commande expirée / annulée / remboursée, accents, apostrophes, avis de 1000 car.
+-- Le jeu d'essai écrit lui-même un historique daté (commandes créées dans le passé, directement dans
+-- leur statut final) : le trigger d'historisation (T-02) est suspendu le temps du chargement, qui se fait
+-- dans une seule transaction (--single-transaction). Les autres triggers restent actifs.
+ALTER TABLE commande DISABLE TRIGGER trg_commande_historique;
+
 DO $seed$
 DECLARE
     mdp        constant text := '$2y$12$d0LeBSaWsGdBWYDKahQfae9phpVRYJ8Kn23e22XEjF/ffpJeyD/tG';
@@ -232,3 +237,5 @@ BEGIN
     END LOOP;
 END
 $seed$;
+
+ALTER TABLE commande ENABLE TRIGGER trg_commande_historique;
