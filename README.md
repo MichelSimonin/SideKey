@@ -67,12 +67,15 @@ make help      # toutes les commandes
 | `php` | PHP 8.4-FPM + pdo_pgsql, redis, intl, sodium, apcu, xdebug | via Nginx |
 | `database` | postgres:17-alpine — bases `sidekey` et `sidekey_test` | 127.0.0.1:5432 |
 | `redis` | redis:8-alpine, mot de passe, persistance AOF | 127.0.0.1:6379 |
+| `worker` | même image que `php` : tâches planifiées (`messenger:consume scheduler_default`), dont la libération des réservations expirées chaque minute | — |
 
 - Le front appelle `/api` sur sa propre origine et Vite relaie vers Nginx : pas de CORS en dev, et le cookie du refresh token peut rester `SameSite=Strict`.
 - Les ports ne sont ouverts que sur `127.0.0.1`, pas sur le réseau local.
 - Sous Docker, `DATABASE_URL` et `REDIS_URL` viennent du `.env` racine via `compose.yaml` et l'emportent sur `api/.env`.
 - Xdebug est installé mais coupé : `XDEBUG_MODE=debug` dans `.env`, puis `make restart`.
 - `make clean` supprime les volumes (bases et Redis) : le script `docker/postgres/init/` ne rejoue qu'à la création du volume.
+
+Base de dev : `make db-migrate` applique le schéma (tables, fonctions, triggers, droits) sur la base `sidekey` vide ; `make db-seed` recrée la base `sidekey_test` avec le jeu d'essai, utilisée par PHPUnit.
 
 Exemples : `make console c="debug:router"`, `make composer c="require symfony/orm-pack"`, `make psql`, `make redis-cli`, `make logs s=php`.
 
@@ -86,7 +89,7 @@ Aucun fichier `.env` n'est versionné : seuls les `.env.example` le sont, sans a
 make test        # PHPUnit (api/) + Vitest et oxlint (front/)
 ```
 
-- Tests API : `api/tests/Unit` (sans Symfony), `api/tests/Integration` (noyau Symfony), `api/tests/Security`.
+- Tests API : `api/tests/Unit` (sans Symfony), `api/tests/Integration` (noyau Symfony, PostgreSQL `sidekey_test` et Redis : lancer `make db-seed` une fois avant), `api/tests/Security`.
 - Tests front : à côté du code, `*.test.ts(x)`, avec Vitest + Testing Library (jsdom).
 - CI GitHub Actions (`.github/workflows/`) à chaque PR et push sur `main` :
   - `ci.yml` : jobs `api` (composer validate/audit, lint config, PHPUnit), `front` (npm audit, lint, Vitest, build typé), `docker` (validation de `compose.yaml`), et `ci-success` qui les regroupe ;
