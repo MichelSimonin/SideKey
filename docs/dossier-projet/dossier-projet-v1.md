@@ -202,6 +202,8 @@ Diagrammes : [cas d'utilisation global](../uml/exports/uc-global.svg), [front-of
 
 - ✅ **Réalisé dans le front** : **E05** connexion / inscription (F-03), `front/src/features/auth/` ; routes `/connexion` et `/inscription`. Accessibilité : étiquettes visibles reliées aux champs, `autocomplete` adapté (`username`, `current-password`, `new-password`, `given-name`, `family-name`, `email`), erreurs reliées par `aria-describedby` et `aria-invalid`, résumé des erreurs annoncé (`role="alert"`) et focalisé, vue active signalée par `aria-current`, décompte de caractères annoncé poliment, aucune limite de temps, mot de passe affichable. FR et EN complets.
 
+- ✅ **Réalisés dans le front** : **E02** catalogue (`/catalogue`) et **E03** fiche jeu (`/jeux/:slug`), F-01, `front/src/features/catalogue/`. E02 : grille paginée par 20, filtres plateforme / genre / prix / PEGI / recherche / tri regroupés en `fieldset` + `legend`, **critères reflétés dans l'URL** (lien partageable, bouton « précédent »), nombre de résultats annoncé dans une région `aria-live`, message explicite si aucun résultat, pagination en vrais liens. E03 : jaquette, description FR / EN, éditeur, **PEGI écrit en texte**, offres par plateforme avec prix et **stock en toutes lettres** (« 12 clés disponibles »), note moyenne, ajout au panier (API F-05). FR et EN complets.
+
 > ⏳ Insérer ici les captures des écrans clés (E02 catalogue, E03 fiche jeu, E07 paiement, E14 commandes à vérifier) exportées de Figma.
 
 ### 5.3 Exigences transverses ✅
@@ -212,6 +214,17 @@ Diagrammes : [cas d'utilisation global](../uml/exports/uc-global.svg), [front-of
 | **RGPD** | Minimisation (pas d'adresse, pas de date de naissance), durées de conservation (anonymisation après 3 ans d'inactivité, 10 ans pour les pièces comptables, 6 mois à 1 an pour les journaux), export et suppression du compte, hébergement UE |
 | **Éco-conception (RGESN)** | Images WebP en différé, pagination, cache Redis, une seule police ; cible page < 1 Mo et EcoIndex B |
 | **Multilingue** | FR / EN uniquement ; interface, erreurs de l'API, e-mails et contenus du catalogue traduits ; test CI si une clé manque |
+
+**Éco-conception mise en œuvre (F-01, RGESN)** : choix faits pour que le catalogue pèse peu, côté réseau comme côté serveur.
+
+| Levier | Mise en œuvre | Effet |
+|---|---|---|
+| Images | `loading="lazy"`, `decoding="async"`, `width` et `height` déclarés sur chaque jaquette ; format WebP ; aucune image décorative ; une jaquette absente ou en erreur est remplacée par un bloc de texte | Une image hors écran n'est pas téléchargée ; pas de décalage de mise en page ; zéro octet pour un jeu sans jaquette |
+| Pagination | 20 jeux par page, jamais le catalogue entier ; une page au-delà du dernier résultat n'exécute pas la requête de lecture | Charge réseau et SQL bornées, quelle que soit la taille du catalogue |
+| Cache | Redis côté serveur (5 min) ; `Cache-Control: public, max-age=60` (liste, fiche) et 300 s (filtres) avec `Vary: Accept-Language` côté HTTP | Une lecture répétée ne touche ni PostgreSQL ni le serveur d'application quand un cache intermédiaire s'en charge |
+| Charge de calcul | Pas de bibliothèque de recherche ni de requête plein texte : un `LIKE` sur quelques dizaines à quelques milliers de titres ; recherche déclenchée à la validation du formulaire, pas à chaque frappe | Aucune requête par touche pressée |
+| Données transférées | DTO de sortie minimaux (une carte = 9 champs), prix et libellés déjà calculés par le serveur, aucun champ inutilisé | Réponses de liste de l'ordre de quelques ko |
+| Front | Une seule dépendance ajoutée par F-03 pour le routage (`react-router-dom`) ; F-01 n'en ajoute aucune ; police système, pas de bibliothèque de composants (bundle : 112 ko compressés) | Page légère, rendu rapide sur mobile |
 
 ---
 
@@ -298,7 +311,7 @@ Les points de la définition de terminé liés au code (tests, FR / EN, validati
 | Jetons de rafraîchissement | `refresh:{jti}` → `userId:familleId` ; `refresh:used:{jti}` → `familleId` ; `refresh:family:{familleId}` (ensemble) | 7 j |
 | Révocation des jetons d'accès | `jwt:deny:{jti}` ; `jwt:deny:fam:{familleId}` | durée restante / 15 min |
 | Limitation de débit, anti-fraude | `rl:login:{ip}`, `rl:register:{ip}`, `fraud:keys24h:{userId}` | 15 min / 1 h / 24 h |
-| Cache catalogue | `cache:jeu:{slug}:{langue}` | 5 min |
+| Cache catalogue | `cache:jeu:{slug}:{langue}`, `cache:jeux:v{n}:{langue}:{empreinte}`, `cache:filtres:v{n}:{langue}`, `cache:jeux:version` | 5 min (le compteur de version n'expire pas) |
 
 Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des paniers et des sessions, jamais une commande ni une clé.
 
@@ -308,6 +321,13 @@ Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des pa
 - **Visiteur** : panier identifié par un cookie opaque (uuid aléatoire), `HttpOnly`, `Secure`, `SameSite=Strict` ; une valeur forgée est ignorée et ne peut pas désigner une autre clé Redis.
 - **Réservation** : minuteur `resa:{commandeId}` aligné sur l'échéance de la commande ; l'expiration réelle reste en base, appliquée chaque minute par une tâche planifiée (Symfony Scheduler, service `worker`) qui appelle `fn_liberer_reservations_expirees`.
 - **Tests** : composant Redis contre un vrai serveur (TTL, expiration réelle, transaction), accès SQL sur la base de test, API de bout en bout ; PostgreSQL et Redis tournent dans la CI.
+
+**Réalisé (F-01)** :
+- **Cache du catalogue** (`RedisCatalogueCache`, interface `CatalogueCache`) : lecture directe (*cache-aside*), valeurs en **JSON** (jamais de `serialize()` PHP) avec TTL de 5 minutes. Une fiche = une clé par langue (`cache:jeu:{slug}:{langue}`). Une liste filtrée = `cache:jeux:v{n}:{langue}:{empreinte}` où `{empreinte}` est le SHA-256 des critères normalisés (ordre des cases, casse et espaces ignorés) : seules des valeurs validées (slug conforme, langue de l'énumération, empreinte) entrent dans une clé.
+- **Invalidation** : `invaliderJeu(slug)` supprime la fiche dans les deux langues ; `invaliderListes()` **incrémente** `cache:jeux:version` : toutes les listes et valeurs de filtres deviennent caduques en une opération O(1), les anciennes entrées expirant seules par TTL (aucun `SCAN` ni `DEL` en masse). Toute écriture du catalogue doit appeler les deux (le back-office F-09 s'y branchera) ; le TTL de 5 minutes n'est qu'un filet de sécurité. Documenté dans `architecture-couches.md` §7.
+- **Disponibilité d'abord** : si Redis ne répond pas, les lectures renvoient « absent », les écritures sont ignorées et l'incident est journalisé ; le catalogue se lit alors directement en base. À l'inverse de l'authentification (qui refuse), le cache n'est qu'une optimisation de données publiques.
+- **Un 404 n'est jamais mis en cache**, et un slug mal formé ne touche ni la base ni Redis : un client ne peut pas inonder Redis de clés.
+- **Tests** : composant Redis contre un vrai serveur (clés, TTL réel, invalidation, entrée corrompue ou à objet sérialisé, Redis arrêté), API de bout en bout (la fiche reste celle du cache malgré une modification en base, puis se rafraîchit après invalidation).
 
 **Réalisé (F-03)** :
 - **Jetons de rafraîchissement** (`RedisStockRefresh`) : le jeton opaque n'est **jamais** une clé Redis, seule son empreinte SHA-256 l'est (`{jti}` ci-dessus) : un export de Redis ne livre aucune session utilisable. La rotation est un **script Lua** exécuté d'un bloc par Redis : le jeton actif est supprimé, un marqueur `refresh:used:{jti}` le remplace, son successeur hérite du compte et de la famille. Deux requêtes simultanées avec le même jeton ne peuvent donc pas réussir toutes les deux.
@@ -492,7 +512,9 @@ END IF;
 
 Une clé vendue est ensuite protégée par `trg_cle_licence_protection` : toute modification ou suppression lève `SK003`, sauf l'enregistrement de la première révélation par l'acheteur.
 
-### 8.6 Authentification : composants métier, d'accès aux données et contrôleur (F-03)
+### 8.6 Réalisations métier : authentification (F-03) et catalogue (F-01)
+
+#### 8.6.1 Authentification (F-03)
 
 **a) Rejouer un jeton de rafraîchissement ne doit jamais réussir : rotation atomique en Lua**
 
@@ -611,6 +633,93 @@ lexik_jwt_authentication:
         query_parameter: { enabled: false }
 ```
 
+#### 8.6.2 Catalogue : requête paramétrée, cache et contrôleur (F-01)
+
+**f) Une recherche filtrée sans aucune concaténation de valeur du client**
+
+`api/src/Repository/CatalogueRepository.php` (composant d'accès aux données SQL, extrait) — chaque critère est un fragment constant ajouté seulement s'il est présent ; ses valeurs sont des paramètres liés, listes comprises ; le tri vient d'une liste blanche ; les jokers `%` et `_` de la recherche sont échappés.
+
+```php
+if (null !== $f->recherche) {
+    $sql .= " AND lower(translate(j.titre, :accents, :sansAccent)) LIKE :motif ESCAPE '\\'";
+    $params['motif'] = RechercheTitre::motifContient($f->recherche);   // « % » devient « \% » : un caractère, pas un joker
+}
+if ([] !== $f->plateformes) {
+    $sql .= ' AND p.code IN (:plateformes)';
+    $params['plateformes'] = $f->plateformes;
+    $types['plateformes'] = ArrayParameterType::STRING;
+}
+// ...
+$base.' SELECT ... FROM b ORDER BY '.$filtres->tri->clauseSql().' LIMIT :limite OFFSET :decalage'
+```
+
+`api/src/Service/Catalogue/TriCatalogue.php` — le client envoie un mot-clé, jamais une colonne : toute autre valeur est refusée en 422 avant d'atteindre la base.
+
+```php
+enum TriCatalogue: string
+{
+    case Titre = 'titre';
+    case PrixCroissant = 'prix_asc';
+    // ...
+    public function clauseSql(): string
+    {
+        return match ($this) {
+            self::Titre => 'b.titre ASC, b.id ASC',
+            self::PrixCroissant => 'b.prix_min ASC, b.titre ASC, b.id ASC',   // l'identifiant en dernier : ordre total, pagination stable
+            // ...
+        };
+    }
+}
+```
+
+**g) Le service : cache en lecture directe, 404 jamais mis en cache**
+
+`api/src/Service/Catalogue/CatalogueService.php` (extrait) — aucune connaissance de HTTP ; un slug hors format n'atteint ni Redis ni PostgreSQL.
+
+```php
+public function fiche(string $slug, Langue $langue): JeuFiche
+{
+    if (\strlen($slug) > self::SLUG_MAX || 1 !== preg_match(self::SLUG, $slug)) {
+        throw new JeuIntrouvableException();   // pas de clé Redis fabriquée par le client
+    }
+    $fiche = $this->cache->fiche($slug, $langue);
+    if (null === $fiche) {
+        $fiche = $this->recherche->fiche($slug, $langue) ?? throw new JeuIntrouvableException();   // un 404 n'est jamais mis en cache
+        $this->cache->memoriserFiche($slug, $langue, $fiche);
+    }
+    return $fiche;
+}
+```
+
+**h) Invalider toutes les listes en une opération**
+
+`api/src/Infrastructure/Redis/RedisCatalogueCache.php` (extrait) — la version fait partie de la clé : l'incrémenter rend les anciennes listes inatteignables ; elles expirent seules.
+
+```php
+public function invaliderListes(): void
+{
+    $this->redis->incr(self::CLE_VERSION);          // cache:jeux:version
+}
+private function cleListe(FiltresCatalogue $filtres, Langue $langue): ?string
+{
+    $version = $this->version();                   // null si Redis ne répond pas : lecture directe en base
+    return null === $version ? null : sprintf('cache:jeux:v%d:%s:%s', $version, $langue->value, $filtres->empreinte());
+}
+```
+
+**i) Le contrôleur : validation des paramètres par DTO, aucune requête**
+
+`api/src/Controller/Api/JeuController.php` (extrait) — `#[MapQueryString]` valide `RechercheCatalogueRequest` (formats, bornes, liste blanche) ; une valeur invalide donne un 422 qui désigne le paramètre fautif.
+
+```php
+#[Route('/api/jeux', name: 'api_jeux_liste', methods: ['GET'])]
+public function liste(Request $requete, #[MapQueryString(validationFailedStatusCode: Response::HTTP_UNPROCESSABLE_ENTITY)] RechercheCatalogueRequest $criteres = new RechercheCatalogueRequest()): JsonResponse
+{
+    $page = $this->catalogue->liste($criteres->versFiltres(), Langue::depuis($requete->getLocale()));
+    return $this->reponse(CatalogueResponse::liste($page), 60);   // Cache-Control public, max-age=60, Vary: Accept-Language
+}
+```
+
 ### 8.7 Extraits restant à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
@@ -639,17 +748,40 @@ lexik_jwt_authentication:
 
 | Partie | Tests | Résultat |
 |---|---|---|
-| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret | 169 / 169 ✅ |
-| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion | 104 / 104 ✅ |
-| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse | 142 / 142 ✅ |
-| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions | 80 / 80 ✅ |
+| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes | 227 / 227 ✅ |
+| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) | 192 / 192 ✅ |
+| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie | 177 / 177 ✅ |
+| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions ; **F-01** : sérialisation des filtres et de l’URL (assainissement), E02 (grille, filtres en fieldset, aria-live, pagination, jaquettes en différé, HTML non interprété), E03 (offres, stock en texte, ajout au panier, 404) | 131 / 131 ✅ |
 | CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml`, tests SQL ; clés JWT jetables générées par la CI | Verte sur chaque PR |
 
 **Sécurité des tests** : les jetons falsifiés sont fabriqués par un utilitaire indépendant de Lexik (`tests/Support/Auth/JwtForge.php`) qui joue l'attaquant ; chaque attaque a son **témoin** (le même jeton, régulier, est accepté) pour que les refus prouvent quelque chose. Les routes du back-office n'existant pas encore, une **sonde RBAC** (chargée en environnement de test uniquement) expose une route par permission et suit le chemin d'une vraie route.
 
-### 9.3 Jeu d'essai de la fonctionnalité la plus représentative ⏳
+### 9.3 Jeu d'essai de la fonctionnalité la plus représentative 🟡
 
-Fonctionnalité retenue : **achat concurrent de la dernière clé** (O2, ENF-03). Tableau à remplir quand F-06 sera livrée :
+#### 9.3.1 Catalogue : filtres combinés et pagination (F-01) ✅
+
+Fonctionnalité retenue pour F-01 : **recherche filtrée et paginée du catalogue** (US-01 à US-05), la plus riche en entrées utilisateur. Données : le jeu d'essai de la base `sidekey_test` (40 jeux dont 1 inactif, 60 offres, 3 plateformes proposées, 8 genres, prix de 9,99 € à 54,99 €).
+
+Méthode : pour chaque cas, le **résultat attendu** est calculé par une requête SQL **indépendante** (écrite à part, sans passer par l'application) ; le **résultat obtenu** est celui du service `CatalogueService` exécuté sur la même base le 25/11/2026. Les mêmes cas sont rejoués à chaque PR par `CatalogueRepositoryTest`, `JeuControllerTest` et `CatalogueSecurityTest`.
+
+| Cas | Données en entrée | Résultat attendu | Résultat obtenu | Écart |
+|---|---|---|---|---|
+| 1 | Aucun filtre, page 1 | total 39 · 20 jeux · 2 pages | total 39 · 20 jeux · 2 pages | aucun |
+| 2 | Page 2 | 19 jeux | 19 jeux | aucun |
+| 3 | Page 3 (au-delà de la dernière) | 404 (`PageIntrouvableException`) | 404 (`PageIntrouvableException`) | aucun |
+| 4 | `q` = « ECARLATE » (majuscules, sans accent) | 1 jeu : Aube d'Écarlate | 1 jeu : Aube d'Écarlate | aucun |
+| 5 | `q` = « % » (joker `LIKE`) | 0 résultat | 0 résultat | aucun |
+| 6 | `plateforme` = XBOX | 5 jeux | 5 jeux | aucun |
+| 7 | PSN + genre `action` + PEGI ≤ 16 + prix ≤ 30 € | 1 jeu | 1 jeu | aucun |
+| 8 | Tri `prix_asc`, premier résultat | prix minimum 999 centimes | prix minimum 999 centimes | aucun |
+| 9 | `q` = « x'; DROP TABLE jeu; -- » | 0 résultat, table `jeu` intacte (40 lignes) | 0 résultat, table `jeu` : 40 lignes | aucun |
+| 10 | Fiche `jeu-essai-01` lue deux fois | clé `cache:jeu:jeu-essai-01:fr`, TTL ≤ 300 s | clé présente, TTL 300 s | aucun |
+
+**Analyse des écarts.** Aucun écart de fond. Le comparateur automatique du script a signalé les cas 9 et 10 parce que les libellés ne sont pas identiques au caractère près (formulation, pas valeur) ; la lecture des valeurs confirme qu'elles concordent. Deux enseignements tirés des tests de ce ticket : (1) une apostrophe seule (`q='`) renvoie légitimement les 12 titres qui en contiennent, ce n'est pas une injection : l'attente du test était fausse et a été corrigée ; (2) une entrée de cache à la forme inattendue produisait des avertissements PHP au lieu d'être ignorée, ce qui a conduit à valider les clés de chaque entrée relue (`ContratCache`).
+
+#### 9.3.2 Achat concurrent de la dernière clé (O2, ENF-03) ⏳
+
+Fonctionnalité retenue pour la soutenance : **achat concurrent de la dernière clé**. Tableau à remplir quand F-06 sera livrée :
 
 | Cas | Données en entrée | Résultat attendu | Résultat obtenu |
 |---|---|---|---|
@@ -712,6 +844,7 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Internationalisation | Front FR / EN (sélecteur mémorisé, `lang`, clés typées, parité testée) ; erreurs de l'API traduites selon `Accept-Language` (F-02) | `front/src/i18n/`, `api/translations/` |
 | Panier et réservation | API du panier sur Redis, règles de quantité et de stock, minuteur de réservation, libération planifiée des réservations expirées (F-05) | `api/src/Service/Panier/`, `api/src/Infrastructure/Redis/` |
 | Authentification et RBAC | Inscription, connexion, JWT RS256 de 15 min en mémoire, refresh opaque de 7 j à rotation et détection de réutilisation (Redis), CSRF du refresh, argon2id, limitation de débit, matrice RBAC en voter, jeton intermédiaire A2F préparé ; écran E05 FR / EN (F-03) | `api/src/Service/Auth/`, `api/src/Security/`, `api/src/Infrastructure/Redis/`, `front/src/features/auth/`, `api/tests/Security/` |
+| Catalogue et cache Redis | `GET /api/jeux` (pagination à 20, recherche sans accent ni casse, filtres plateforme / genre / prix / PEGI, tris en liste blanche), fiche et valeurs des filtres, SQL paramétré, cache Redis à invalidation par version, repli sur PostgreSQL ; écrans E02 et E03 FR / EN, critères dans l'URL, jaquettes en différé (F-01) | `api/src/Service/Catalogue/`, `api/src/Repository/CatalogueRepository.php`, `api/src/Infrastructure/Redis/RedisCatalogueCache.php`, `front/src/features/catalogue/` |
 
 ### 13.2 Pas encore fait
 
@@ -721,13 +854,13 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | Catalogue, A2F (saisie du code TOTP, enrôlement, codes de secours), commande et concurrence, paiement, clés, back-office | F-01, F-04, F-06 à F-10 |
-| Dossier | Comptes rendus quotidiens, veille personnelle (§10, premières entrées faites), recherche anglophone (§11), extraits métier restants (§8.7), jeu d'essai (§9.3), captures (dont E05), bilan | L-03 (#34) |
+| Features | A2F (saisie du code TOTP, enrôlement, codes de secours), commande et concurrence, paiement, clés, back-office ; branchement de l'invalidation du cache catalogue sur les écritures (`invaliderJeu`, `invaliderListes`) | F-04, F-06 à F-10 |
+| Dossier | Comptes rendus quotidiens, veille personnelle (§10, premières entrées faites), recherche anglophone (§11), extraits métier restants (§8.7), jeu d'essai de l'achat concurrent (§9.3.2), captures (dont E02, E03 et E05), bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 
 ### 13.3 Points de vigilance
 
-- **Planning** : le panier (F-05) et l'authentification (F-03) sont livrés ; le catalogue (F-01), l'A2F (F-04) et le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
+- **Planning** : le panier (F-05), l'authentification (F-03) et le catalogue (F-01) sont livrés ; le catalogue (F-01) est livré ; l'A2F (F-04) et le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
 - **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-03.
 - **Proxy et adresse du client** : la limitation de débit s'appuie sur `Request::getClientIp()` ; derrière un reverse proxy (Caddy en recette), `trusted_proxies` devra être configuré par T-04, faute de quoi toutes les requêtes partageraient l'adresse du proxy.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
