@@ -1,0 +1,11 @@
+# Messages de validation propres à SideKey (domaine « validators », F-03). Les messages des contraintes
+# Symfony (NotBlank, Length, Email…) sont fournis traduits par le composant.
+password:
+    too_short: 'Le mot de passe doit contenir au moins {{ min }} caractères.'
+    too_long: 'Le mot de passe ne doit pas dépasser {{ max }} caractères.'
+    common: 'Ce mot de passe est trop courant. Choisissez une phrase de passe.'
+    contains_identity: "Le mot de passe ne doit pas contenir votre nom ni votre e-mail."
+name:
+    forbidden_characters: 'Ce champ contient des caractères interdits.'
+consent:
+    required: 'Vous devez accepter les conditions pour créer un compte.'
