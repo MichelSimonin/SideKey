@@ -151,6 +151,8 @@ export type RequestOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   fetchFn?: typeof fetch
+  /** Permet d'abandonner une requête devenue inutile (changement de filtres, de page, de langue). */
+  signal?: AbortSignal
 }
 
 /**
@@ -160,7 +162,7 @@ export type RequestOptions = {
  * est effacée et l'erreur 401 remonte (l'interface renvoie vers la connexion).
  */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, fetchFn = fetch } = options
+  const { method = 'GET', body, fetchFn = fetch, signal } = options
 
   const send = (): Promise<Response> => {
     const token = getAccessToken()
@@ -176,6 +178,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: 'same-origin',
+      signal,
     })
   }
 

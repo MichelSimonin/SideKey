@@ -10,11 +10,14 @@
       "label": "Language",
       "fr": "Français",
       "en": "English"
-    }
+    },
+    "catalogue": "Catalogue",
+    "mainNav": "Main navigation"
   },
   "home": {
     "title": "Your game keys, delivered instantly",
-    "subtitle": "Buy a key and see it as soon as you pay. No key is ever sold twice."
+    "subtitle": "Buy a key and see it as soon as you pay. No key is ever sold twice.",
+    "cta": "Browse the catalogue"
   },
   "footer": {
     "copyright": "© SideKey — CDA training project",
@@ -63,5 +66,78 @@
       "rateLimited": "Too many attempts. Try again in {{minutes}} min."
     },
     "secondFactor": "This account is protected by two-factor authentication. Code entry will be available soon."
+  },
+  "catalogue": {
+    "title": "Catalogue",
+    "loading": "Loading the catalogue…",
+    "error": "The catalogue is temporarily unavailable. Please try again in a moment.",
+    "retry": "Try again",
+    "none": "No game matches your search. Change or reset the filters.",
+    "results_one": "{{count}} game found",
+    "results_other": "{{count}} games found",
+    "pageOutOfRange": "This results page does not exist.",
+    "firstPage": "Back to the first page",
+    "filters": {
+      "legend": "Refine your search",
+      "search": "Search a title",
+      "platforms": "Platforms",
+      "genres": "Genres",
+      "price": "Price (in euros)",
+      "priceMin": "Minimum",
+      "priceMax": "Maximum",
+      "pegi": "Maximum PEGI rating",
+      "pegiAll": "All ages",
+      "pegiOption": "PEGI {{age}}",
+      "sort": "Sort by",
+      "apply": "Apply filters",
+      "reset": "Reset filters",
+      "loading": "Loading filters…"
+    },
+    "sorts": {
+      "titre": "Title (A to Z)",
+      "nouveaute": "Newest",
+      "prix_asc": "Price: low to high",
+      "prix_desc": "Price: high to low",
+      "note": "Best rated"
+    },
+    "card": {
+      "from": "From {{price}}",
+      "available": "In stock",
+      "soldOut": "Out of stock",
+      "pegi": "PEGI {{age}}",
+      "platforms": "Platforms: {{list}}",
+      "rating": "Rated {{rating}} out of 5 ({{count}} reviews)",
+      "noRating": "Not rated yet"
+    },
+    "pagination": {
+      "label": "Results pagination",
+      "previous": "Previous page",
+      "next": "Next page",
+      "page": "Page {{page}}",
+      "current": "Page {{page}} of {{total}}"
+    }
+  },
+  "game": {
+    "loading": "Loading the game…",
+    "coverAlt": "Cover of {{title}}",
+    "noCover": "No cover",
+    "pegi": "PEGI {{age}}: ages {{age}} and over",
+    "publisher": "Publisher",
+    "releaseDate": "Release date",
+    "genres": "Genres",
+    "offers": "Offers by platform",
+    "stock_one": "{{count}} key available",
+    "stock_other": "{{count}} keys available",
+    "outOfStock": "Out of stock",
+    "addToCart": "Add to cart",
+    "addToCartFor": "Add to cart: {{title}} on {{platform}}",
+    "adding": "Adding…",
+    "added": "Added to cart.",
+    "addError": "This offer could not be added to the cart.",
+    "rating": "Average rating: {{rating}} / 5 ({{count}} reviews)",
+    "noReviews": "No reviews yet",
+    "notFoundTitle": "Game not found",
+    "notFoundText": "This game does not exist or is no longer in the catalogue.",
+    "back": "Back to the catalogue"
   }
 }
