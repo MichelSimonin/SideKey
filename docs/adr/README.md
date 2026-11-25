@@ -12,18 +12,19 @@ Ces fiches ne racontent pas le code : elles expliquent **pourquoi** il est écri
 | ADR-0002 | [PostgreSQL (relationnel) et Redis (NoSQL clé/valeur)](0002-postgresql-redis.md)                                | Accepté | R1 (§0.3)             | 2026-11-23 |
 | ADR-0003 | [JWT d'accès court et jeton de rafraîchissement rotatif](0003-jwt-et-jeton-de-rafraichissement.md)              | Accepté | B2, B3 (§0.2)         | 2026-11-23 |
 | ADR-0004 | [Chiffrement AES-256-GCM et empreinte HMAC-SHA256 des clés de licence](0004-chiffrement-des-cles-de-licence.md) | Accepté | §9.4 (RG-03)          | 2026-11-23 |
-| ADR-0005 | [Hébergement dans l'Union européenne](0005-hebergement-dans-l-ue.md)                                            | Accepté | R4 (§0.3)             | 2026-11-23 |
+| ADR-0005 | [Hébergement dans l'Union européenne](0005-hebergement-dans-l-ue.md)                                            | Remplacé par ADR-0009 | R4 (§0.3)             | 2026-11-23 |
 | ADR-0006 | [Architecture en couches de l'API](0006-architecture-en-couches.md)                                             | Accepté | §8.1, §8.2 (REAC C6)  | 2026-11-23 |
 | ADR-0007 | [PlantUML pour tous les diagrammes](0007-modelisation-plantuml.md)                                              | Accepté | B5 (§0.2)             | 2026-11-23 |
 | ADR-0008 | [Paiement simulé et anti-fraude de niveau Équilibré](0008-paiement-simule-et-anti-fraude.md)                    | Accepté | F12 (§0.1), R3 (§0.3) | 2026-11-23 |
+| ADR-0009 | [Hébergement sur un poste du binôme, exposé par Tailscale Funnel](0009-hebergement-sur-un-poste-du-binome.md)   | Accepté | R4 (§0.3), R10 (§19)  | 2026-11-25 |
 
-Les huit fiches sont produites par le ticket **#4 (C-03)** « Modélisation PlantUML et ADR ». Les décisions B1, B2, B3, B5, R1, R3 et R4, ainsi que F12, y sont traduites ; les tickets de mise en œuvre sont rappelés dans chaque fiche.
+Les huit premières fiches sont produites par le ticket **#4 (C-03)** « Modélisation PlantUML et ADR », ADR-0009 par **T-04 (#6)**. Les décisions B1, B2, B3, B5, R1, R3 et R4, ainsi que F12, y sont traduites ; les tickets de mise en œuvre sont rappelés dans chaque fiche.
 
 ## Quand écrire un ADR
 
 - Pour une décision **structurante**, difficile à défaire, qui engage plusieurs tickets ou plusieurs couches : choix de framework, de base de données, de mécanisme de sécurité, de mode de déploiement, de contrat entre l'API et la SPA.
 - Pas pour un détail d'implémentation local (nom d'une méthode, choix d'une petite bibliothèque) : cela relève de la revue de PR.
-- **Au moment de la décision**, pas après. La fiche est rédigée dans la PR qui introduit le choix, ou dans le ticket de conception quand la décision précède le code — c'est le cas des huit fiches présentes, produites par C-03.
+- **Au moment de la décision**, pas après. La fiche est rédigée dans la PR qui introduit le choix, ou dans le ticket de conception quand la décision précède le code — c'est le cas des huit premières fiches, produites par C-03.
 - Une décision déjà tranchée par le cahier des charges (B*, R*, F*) n'est pas re-décidée : l'ADR explique comment le binôme la met en œuvre et ce qu'elle coûte.
 - Un point restant à valider (§19) devient un ADR dès qu'il est tranché, pas avant.
 
@@ -65,7 +66,7 @@ et, si l'on veut être explicite, une phrase en fin de fiche : « Cette décisio
 
 Pourquoi : une fiche réécrite efface le raisonnement d'origine, et l'on ne sait plus ce qui était vrai au moment du choix. En soutenance, pouvoir dire « nous avions décidé cela le 23/11, puis nous l'avons remplacé parce que… » vaut mieux qu'une fiche toujours à jour qui ne raconte rien.
 
-Exemple concret : ADR-0005 pose le principe d'un hébergement dans l'UE, laissant le fournisseur au J3 (R10). Le fournisseur retenu sera consigné dans un **ADR-0009**, et ADR-0005 restera `Accepté` — il n'a pas été remplacé, seulement complété.
+Exemple concret : ADR-0005 retenait un VPS loué dans l'UE et écartait l'hébergement sur un poste du binôme. Au J3, le binôme a fait l'inverse : **ADR-0009** consigne le nouveau choix et ses raisons, et ADR-0005 est passé à `Remplacé par ADR-0009`, sans autre modification.
 
 ## Qui décide
 
@@ -90,7 +91,6 @@ Le binôme porte le rôle de PO (F8) : il tranche les arbitrages de périmètre,
 
 | Sujet                                                            | Pourquoi un ADR                                                                                                                 | Déclencheur                        |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Fournisseur d'hébergement et localisation exacte                 | ADR-0005 fixe le principe de l'UE, pas le prestataire ; prix, réversibilité et sous-traitance RGPD doivent être tracés          | J3, T-04 (R10)                     |
 | Rotation et versionnement de la clé maître AES et du secret HMAC | ADR-0004 signale que la rotation n'est pas outillée : sans version de clé, une clé compromise est irremplaçable                 | Première clé à changer             |
 | Intégration d'un prestataire de paiement réel                    | F12 et le §11.6 annoncent un branchement v2 grâce au patron Strategy ; PCI DSS et 3-D Secure à cadrer                           | Ouverture commerciale              |
 | Externalisation des sauvegardes et objectifs RPO/RTO             | ENF-14 impose RPO 24 h et RTO 1 h, alors que la sauvegarde vit sur le même VPS                                                  | L-02 (test de restauration)        |

@@ -2,7 +2,7 @@
 
 | Élément                        | Valeur                                                                                                                                                                                                       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Statut                         | Accepté                                                                                                                                                                                                      |
+| Statut                         | Remplacé par ADR-0009                                                                                                                                                                                                |
 | Date                           | 2026-11-23                                                                                                                                                                                                   |
 | Décideurs                      | Binôme SideKey (M1, M2)                                                                                                                                                                                      |
 | Décision du cahier des charges | R4 (§0.3) — hébergement dans l'UE ; précisions R10 (§19) et §8.3                                                                                                                                             |
@@ -78,3 +78,5 @@ Le fournisseur retenu fera l'objet d'un **nouvel ADR**, pas d'une réécriture d
 - [Cahier des charges v1.2](../cahier_des_charges_v1.2_SideKey.md) — §0.3 (R4), §8.3, §9.7, §11.1, §12.1, §13 (ENF-13, ENF-14), §15.1 à §15.5, §19 (R10).
 - [Index des ADR](README.md) — ADR-0001 (application conteneurisée), ADR-0002 (bases de données), ADR-0008 (paiement simulé, aucun prestataire externe).
 - [README du dépôt](../../README.md) — environnement Docker de développement, utilisé à l'identique en recette.
+
+Cette décision est remplacée par [ADR-0009](0009-hebergement-sur-un-poste-du-binome.md) depuis le 2026-11-25.

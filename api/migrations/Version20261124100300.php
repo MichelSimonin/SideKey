@@ -12,6 +12,10 @@ use Doctrine\Migrations\AbstractMigration;
  * PostgreSQL sont globaux au serveur, une migration exécutée par sk_owner ne peut pas les créer).
  *
  * Le SQL vit dans api/sql/roles/ (source unique, relue en PR et jouée aussi par la CI avec psql).
+ *
+ * Le fichier contient plusieurs commandes (et des corps PL/pgSQL) : il est envoyé d'un bloc par
+ * executeStatement(), car addSql() passe par une requête préparée, que PostgreSQL limite à une seule
+ * commande. Conséquence : --dry-run et --write-sql ne s'appliquent pas à cette migration.
  */
 final class Version20261124100300 extends AbstractMigration
 {
@@ -22,12 +26,12 @@ final class Version20261124100300 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql($this->sql('02_privileges.sql'));
+        $this->connection->executeStatement($this->sql('02_privileges.sql'));
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql($this->sql('02_privileges.down.sql'));
+        $this->connection->executeStatement($this->sql('02_privileges.down.sql'));
     }
 
     private function sql(string $fichier): string

@@ -1,0 +1,66 @@
+# Point d'entrée HTTP de SideKey en recette et en production (T-04, ADR 0009).
+#
+# Chaîne : navigateur --HTTPS--> Tailscale Funnel (sur le PC) --HTTP--> Caddy (ce fichier) --FastCGI--> php-fpm
+# Le TLS est terminé par Tailscale sur la machine (certificat *.ts.net) : Caddy n'écoute qu'en HTTP,
+# sur un port publié uniquement sur 127.0.0.1 (voir deploy/compose.yaml).
+{
+	# Pas de certificat géré par Caddy, pas d'API d'administration
+	auto_https off
+	admin off
+	# Les requêtes arrivent de Tailscale par la passerelle Docker (adresse privée) :
+	# on lui fait confiance pour l'adresse IP du client (X-Forwarded-For) dans les journaux
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:8080 {
+	encode zstd gzip
+	log {
+		output stdout
+		format console
+	}
+
+	# Requêtes de plus de 12 Mo refusées avant d'atteindre PHP (même limite que post_max_size)
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		# Le site n'est servi qu'en HTTPS (Funnel) : le navigateur ne doit plus jamais tenter HTTP
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		# Front et API sur la même origine : aucune ressource tierce autorisée
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	# API : toute URL /api/* passe par le contrôleur frontal Symfony (aucun autre fichier PHP exécutable)
+	@api path /api /api/*
+	handle @api {
+		rewrite * /index.php?{query}
+		reverse_proxy {$API_UPSTREAM:api:9000} {
+			transport fastcgi {
+				root /var/www/api/public
+				split .php
+				# La requête est arrivée en HTTPS (Funnel) : Symfony doit le savoir (cookies Secure, URL générées)
+				env HTTPS {$PUBLIC_HTTPS:on}
+			}
+		}
+	}
+
+	# Front : fichiers du build Vite, et index.html pour toutes les routes de l'application (SPA)
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@index path / /index.html
+		header @index Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

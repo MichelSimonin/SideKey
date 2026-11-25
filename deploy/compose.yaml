@@ -1,0 +1,122 @@
+# Stack de RECETTE et de PRODUCTION de SideKey (T-04, ADR 0009).
+#
+# Ce fichier est copié sur le PC d'hébergement par la CD (.github/workflows/_deploy.yml) et piloté
+# par deploy/deploy.sh : ne pas lancer « docker compose up » à la main.
+# Un dossier et un projet compose par environnement : ~/sidekey/staging (projet sidekey-staging)
+# et ~/sidekey/production (projet sidekey-production), chacun avec ses volumes et ses secrets (.env).
+#
+# Différences avec compose.yaml (développement) :
+#   - images construites par la CD et tirées de GHCR, aucun code monté en volume ;
+#   - seul Caddy (web) est publié, et seulement sur 127.0.0.1 : Tailscale Funnel l'expose en HTTPS ;
+#   - PostgreSQL, Redis, l'API et le worker sont sur un réseau interne, sans accès à Internet ;
+#   - l'API et le worker se connectent avec sk_app, les migrations avec sk_owner (moindre privilège).
+
+x-api-env: &api-env
+  APP_ENV: prod
+  APP_DEBUG: "0"
+  APP_SECRET: ${APP_SECRET:?APP_SECRET manquant dans .env}
+  DEFAULT_URI: ${PUBLIC_URL:?PUBLIC_URL manquant dans .env}
+  DATABASE_URL: "postgresql://sk_app:${SK_APP_PASSWORD:?}@database:5432/${POSTGRES_DB:?}?serverVersion=17&charset=utf8"
+  REDIS_URL: "redis://:${REDIS_PASSWORD:?}@redis:6379"
+
+# Conteneurs applicatifs durcis : aucune capacité Linux, pas d'élévation de privilèges, utilisateur non root
+x-durci: &durci
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  web:
+    <<: *durci
+    image: ${IMAGE_PREFIX:?}/sidekey-web:${IMAGE_TAG:?IMAGE_TAG non fourni (deploy.sh le fixe)}
+    ports:
+      - "127.0.0.1:${HTTP_PORT:?}:8080"
+    # Caddy n'écrit rien : système de fichiers en lecture seule
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks: [public, interne]
+    depends_on:
+      - api
+
+  api:
+    <<: *durci
+    image: ${IMAGE_PREFIX}/sidekey-api:${IMAGE_TAG}
+    # Pas de read_only : Symfony écrit dans var/cache (pools du cache système), seul dossier inscriptible
+    environment: *api-env
+    networks: [interne]
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Tâches planifiées (src/Schedule.php) : libération des réservations expirées chaque minute (RG-12)
+  worker:
+    <<: *durci
+    image: ${IMAGE_PREFIX}/sidekey-api:${IMAGE_TAG}
+    command: ["php", "bin/console", "messenger:consume", "scheduler_default", "--time-limit=3600", "--memory-limit=128M"]
+    environment: *api-env
+    networks: [interne]
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Migrations Doctrine, lancées par deploy.sh avant de démarrer la nouvelle version (compte sk_owner)
+  migrate:
+    image: ${IMAGE_PREFIX}/sidekey-api:${IMAGE_TAG}
+    profiles: [outils]
+    command: ["php", "bin/console", "doctrine:migrations:migrate", "--no-interaction", "--allow-no-migration"]
+    environment:
+      <<: *api-env
+      DATABASE_URL: "postgresql://sk_owner:${SK_OWNER_PASSWORD:?}@database:5432/${POSTGRES_DB}?serverVersion=17&charset=utf8"
+    networks: [interne]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Super-utilisateur : création des rôles sk_* par deploy.sh uniquement, jamais utilisé par l'API
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - database_data:/var/lib/postgresql/data
+    networks: [interne]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks: [interne]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  # Réseau de Caddy, seul service publié (sur 127.0.0.1)
+  public:
+  # Réseau des services internes : aucun accès à Internet, aucun port publié
+  interne:
+    internal: true
+
+volumes:
+  database_data:
+  redis_data:

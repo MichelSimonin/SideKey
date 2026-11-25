@@ -1,0 +1,14 @@
+# Contexte de build de docker/api/Dockerfile (racine du dépôt) : seuls api/ et docker/api/ servent
+*
+!api/
+!docker/api/
+api/vendor/
+api/var/
+api/tests/
+api/bin/phpunit
+api/phpunit.dist.xml
+api/.phpunit.cache/
+api/sauvegardes/
+api/.env
+api/.env.*
+api/config/jwt/*.pem

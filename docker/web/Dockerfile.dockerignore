@@ -1,0 +1,11 @@
+# Contexte de build de docker/web/Dockerfile (racine du dépôt) : seuls front/ et docker/web/ servent
+*
+!front/
+!docker/web/
+front/node_modules/
+front/dist/
+front/coverage/
+front/.env
+front/.env.*
+front/**/*.test.ts
+front/**/*.test.tsx

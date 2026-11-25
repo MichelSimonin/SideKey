@@ -18,6 +18,19 @@ final class HealthControllerTest extends WebTestCase
         self::assertJsonStringEqualsJsonString('{"status":"ok"}', (string) $client->getResponse()->getContent());
     }
 
+    public function testReadinessChecksRealDatabaseAndRedis(): void
+    {
+        $client = static::createClient();
+        $client->request('GET', '/api/health/ready');
+
+        self::assertResponseIsSuccessful();
+        self::assertResponseHeaderSame('Content-Type', 'application/json');
+        self::assertJsonStringEqualsJsonString(
+            '{"status":"ok","checks":{"database":"ok","redis":"ok"}}',
+            (string) $client->getResponse()->getContent(),
+        );
+    }
+
     public function testHealthEndpointRejectsWriteMethods(): void
     {
         $client = static::createClient();

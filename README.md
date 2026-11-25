@@ -45,8 +45,9 @@ SideKey/
 │   │   ├── pages/  routes/     écrans et routage
 │   │   ├── hooks/  types/  utils/  styles/
 │   └── tests/unit|e2e/
-├── docker/                     images et configuration (php, nginx, postgres)
-├── docs/                       cahier des charges, backlog, UML, ADR
+├── deploy/                     recette et production : compose.yaml, deploy.sh (déploiement, retour arrière, sauvegarde)
+├── docker/                     images et configuration : php, nginx, postgres (dev) ; api, web (production)
+├── docs/                       cahier des charges, backlog, UML, ADR, exploitation
 └── scripts/                    outillage (import du backlog dans GitHub)
 ```
 
@@ -92,6 +93,16 @@ make test        # PHPUnit (api/) + Vitest et oxlint (front/)
 - Tests API : `api/tests/Unit` (sans Symfony), `api/tests/Integration` (noyau Symfony, PostgreSQL `sidekey_test` et Redis : lancer `make db-seed` une fois avant), `api/tests/Security`.
 - Tests front : à côté du code, `*.test.ts(x)`, avec Vitest + Testing Library (jsdom).
 - CI GitHub Actions (`.github/workflows/`) à chaque PR et push sur `main` :
-  - `ci.yml` : jobs `api` (composer validate/audit, lint config, PHPUnit), `front` (npm audit, lint, Vitest, build typé), `docker` (validation de `compose.yaml`), et `ci-success` qui les regroupe ;
+  - `ci.yml` : jobs `api` (composer validate/audit, lint config, PHPUnit), `front` (npm audit, lint, Vitest, build typé), `docker` (validation des fichiers compose, ShellCheck, build des images de production et répétition complète du déploiement), `database`, et `ci-success` qui les regroupe ;
   - `pr-title.yml` : le titre de PR doit suivre Conventional Commits (il devient le message du squash merge).
 - Seuls `ci-success` et `pr-title` sont exigés par la protection de `main`.
+
+## Déploiement (recette et production)
+
+La recette et la production tournent sur un PC du binôme, exposé en HTTPS par Tailscale Funnel ([ADR-0009](docs/adr/0009-hebergement-sur-un-poste-du-binome.md)) :
+
+- **recette** : chaque fusion dans `main` dont la CI est verte est construite (images GHCR `sha-<commit>`) puis déployée par `deploy-staging.yml` ;
+- **production** : un tag `vX.Y.Z` sur un commit de `main` promeut les mêmes images, après approbation de l'autre membre (`deploy-production.yml`) ;
+- **retour arrière** : automatique si le test de fumée échoue ; sinon `deploy.sh rollback` ou `deploy.sh restore`.
+
+Procédure complète, secrets à configurer et préparation du PC : [docs/exploitation/deploiement.md](docs/exploitation/deploiement.md).

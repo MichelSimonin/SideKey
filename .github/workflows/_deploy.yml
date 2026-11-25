@@ -1,0 +1,161 @@
+# Étape commune de déploiement (T-04, ADR 0009), appelée par deploy-staging.yml et deploy-production.yml.
+#
+# Le runner GitHub rejoint le réseau privé Tailscale le temps du job (nœud éphémère « tag:ci »), puis,
+# par Tailscale SSH, sur le PC d'hébergement (WSL2) :
+#   1. copie compose.yaml, deploy.sh et le script des rôles PostgreSQL dans ~/sidekey/<environnement>/ ;
+#   2. écrit le .env à partir des variables et secrets de l'environnement GitHub ;
+#   3. lance deploy.sh deploy <version> (sauvegarde, migrations, démarrage, test de fumée, retour auto).
+# Aucun port n'est ouvert sur la box : le PC n'accepte que les connexions SSH venues du tailnet (ACL).
+name: Déploiement (étape commune)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: staging ou production
+        required: true
+        type: string
+      version:
+        description: Tag des images GHCR (sha-<commit> ou vX.Y.Z)
+        required: true
+        type: string
+      ref:
+        description: Commit dont on prend deploy/ et api/sql/roles/
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Déployer en ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Secrets propres à l'environnement ; en production, approbation obligatoire de l'autre membre
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.PUBLIC_URL }}
+    # Jamais deux déploiements simultanés sur le même environnement, et aucun n'est interrompu
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      SIDEKEY_ENV: ${{ inputs.environment }}
+      VERSION: ${{ inputs.version }}
+      DEPLOY_TARGET: ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Vérifier la configuration de l'environnement
+        env:
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          HTTP_PORT: ${{ vars.HTTP_PORT }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: |
+          manque=0
+          for v in DEPLOY_USER DEPLOY_HOST HTTP_PORT PUBLIC_URL; do
+            if [ -z "${!v}" ]; then echo "::error::Variable d'environnement GitHub manquante : $v"; manque=1; fi
+          done
+          [[ "$VERSION" =~ ^(sha-[0-9a-f]{7,40}|v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]] \
+            || { echo "::error::Version invalide : $VERSION"; manque=1; }
+          exit $manque
+
+      - name: Rejoindre le tailnet (nœud éphémère tag:ci)
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      # Tailscale SSH : l'identité des deux machines est garantie par le tailnet (WireGuard), la clé
+      # d'hôte OpenSSH n'apporte rien de plus ; le runner est neuf à chaque job, d'où accept-new.
+      - name: Préparer SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          cat > ~/.ssh/config <<'EOF'
+          Host *
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 15
+            ConnectTimeout 20
+          EOF
+          ssh "$DEPLOY_TARGET" true
+
+      - name: Copier les fichiers de déploiement
+        run: |
+          paquet=$(mktemp -d)
+          mkdir -p "$paquet/roles"
+          cp deploy/compose.yaml deploy/deploy.sh "$paquet/"
+          cp api/sql/roles/01_roles.sql "$paquet/roles/"
+          # shellcheck disable=SC2029  # expansion côté runner voulue (valeurs vérifiées plus haut)
+          tar -C "$paquet" -czf - . | ssh "$DEPLOY_TARGET" \
+            "mkdir -p sidekey/$SIDEKEY_ENV && tar -xzf - -C sidekey/$SIDEKEY_ENV && chmod 700 sidekey/$SIDEKEY_ENV/deploy.sh"
+
+      # Le .env est réécrit à chaque déploiement : les secrets GitHub sont la seule source de vérité.
+      # Il passe par l'entrée standard de SSH (jamais par la ligne de commande) et finit en 0600.
+      - name: Écrire le .env de l'environnement
+        env:
+          IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+          HTTP_PORT: ${{ vars.HTTP_PORT }}
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          POSTGRES_DB: ${{ vars.POSTGRES_DB || 'sidekey' }}
+          POSTGRES_USER: ${{ vars.POSTGRES_USER || 'sidekey_admin' }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SK_OWNER_PASSWORD: ${{ secrets.SK_OWNER_PASSWORD }}
+          SK_APP_PASSWORD: ${{ secrets.SK_APP_PASSWORD }}
+          SK_REPORTING_PASSWORD: ${{ secrets.SK_REPORTING_PASSWORD }}
+          SK_BACKUP_PASSWORD: ${{ secrets.SK_BACKUP_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+        run: |
+          noms="SIDEKEY_ENV IMAGE_PREFIX HTTP_PORT PUBLIC_URL POSTGRES_DB POSTGRES_USER APP_SECRET POSTGRES_PASSWORD SK_OWNER_PASSWORD SK_APP_PASSWORD SK_REPORTING_PASSWORD SK_BACKUP_PASSWORD REDIS_PASSWORD"
+          IMAGE_PREFIX=${IMAGE_PREFIX,,}   # GHCR n'accepte que des minuscules
+          for n in $noms; do
+            v="${!n}"
+            [ -n "$v" ] || { echo "::error::Secret ou variable manquant dans l'environnement $SIDEKEY_ENV : $n"; exit 1; }
+            # Une ligne, sans guillemet ni espace : sûr dans le .env
+            [[ "$v" =~ ^[A-Za-z0-9._:/-]+$ ]] || { echo "::error::Caractères interdits dans $n"; exit 1; }
+            # Les mots de passe entrent dans des URL de connexion (postgresql://, redis://) : ni « : » ni « / » ni « @ »
+            case "$n" in *PASSWORD | APP_SECRET)
+              [[ "$v" =~ ^[A-Za-z0-9._-]{32,}$ ]] || { echo "::error::$n doit faire au moins 32 caractères [A-Za-z0-9._-] (openssl rand -hex 32)"; exit 1; } ;;
+            esac
+          done
+          # shellcheck disable=SC2029  # expansion côté runner voulue (valeurs vérifiées plus haut)
+          for n in $noms; do printf '%s=%s\n' "$n" "${!n}"; done \
+            | ssh "$DEPLOY_TARGET" "umask 077 && cat > sidekey/$SIDEKEY_ENV/.env"
+
+      # Les images GHCR sont lues avec le jeton éphémère du job, retiré du PC à la fin quoi qu'il arrive
+      - name: Connecter le PC à GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          # shellcheck disable=SC2029  # expansion côté runner voulue (valeurs vérifiées plus haut)
+          printf '%s' "$GHCR_TOKEN" | ssh "$DEPLOY_TARGET" "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+
+      - name: Déployer ${{ inputs.version }}
+        run: |
+          # shellcheck disable=SC2029  # expansion côté runner voulue (valeurs vérifiées plus haut)
+          ssh "$DEPLOY_TARGET" "bash sidekey/$SIDEKEY_ENV/deploy.sh deploy '$VERSION'"
+
+      - name: Déconnecter le PC de GHCR
+        if: always()
+        run: ssh "$DEPLOY_TARGET" "docker logout ghcr.io" || true
+
+      - name: Résumé
+        if: success()
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: |
+          {
+            echo "### Déploiement $SIDEKEY_ENV réussi"
+            echo ""
+            echo "- Version : \`$VERSION\`"
+            echo "- URL : $PUBLIC_URL"
+            echo "- Retour arrière : \`bash ~/sidekey/$SIDEKEY_ENV/deploy.sh rollback\` (voir docs/exploitation/deploiement.md)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -8,7 +8,7 @@
 | Activité type couverte | **AT2** — Concevoir et développer une application sécurisée organisée en couches · **AT3** (partie DevOps : CI/CD) |
 | Projet | SideKey, projet de formation en binôme (MSP) |
 | Auteurs | [Michel Simonin] · [Benjamin Nativel] |
-| Version du dossier | **v1 — 24/11/2026** (première version, rédigée en cours de projet ; mises à jour le 24/11 : PR #40, vérification de la conception C-03 et décisions sur le modèle de données) |
+| Version du dossier | **v1 — 24/11/2026** (première version, rédigée en cours de projet ; mises à jour le 24/11 : PR #40, vérification de la conception C-03 et décisions sur le modèle de données ; le 25/11 : livraison continue T-04) |
 | Dépôt | `MichelSimonin/SideKey` sur GitHub |
 
 > **Comment lire cette version.** Le dossier est rédigé au fil du projet, comme le prévoit la définition de « terminé » du backlog. Chaque section porte un état :
@@ -43,10 +43,10 @@
 | Compétence (AT2) | Ce qui la démontre dans SideKey | Section | État |
 |---|---|---|---|
 | **C5** — Analyser les besoins et maquetter une application | 7 personas, besoins BX-01 à BX-24, user stories MoSCoW, maquettes Figma FR (EN en cours), schéma d'enchaînement, exigences RGAA, RGPD et éco-conception | §3, §5 | 🟡 |
-| **C6** — Définir l'architecture logicielle d'une application multicouche répartie | Architecture SPA ↔ API REST en couches ↔ PostgreSQL + Redis, matrice de justification de la stack, 8 ADR, diagrammes de composants et de déploiement, DICP, patrons de conception et de sécurité | §6, §7 | ✅ conception · ⏳ implémentation |
+| **C6** — Définir l'architecture logicielle d'une application multicouche répartie | Architecture SPA ↔ API REST en couches ↔ PostgreSQL + Redis, matrice de justification de la stack, 9 ADR, diagrammes de composants et de déploiement, DICP, patrons de conception et de sécurité | §6, §7 | ✅ conception · ⏳ implémentation |
 | **C7** — Concevoir et mettre en place une base de données relationnelle | MCD (20 entités), MLD (21 tables), MPD PostgreSQL 17 ; rôles SGBD, jeu d'essai, sauvegarde et restauration | §6.4, §8.5 | ✅ conception · ✅ schéma, rôles, jeu d'essai (T-01) · ✅ PL/pgSQL (T-02) |
 | **C8** — Développer des composants d'accès aux données SQL et NoSQL | Repositories Doctrine, PL/pgSQL défensif, `FOR UPDATE SKIP LOCKED`, verrouillage optimiste, Redis (panier, réservations, jetons, limitation de débit) | §6.6, §6.7, §8 | 🟡 PL/pgSQL et `SKIP LOCKED` faits (T-02) · ⏳ repositories, Redis |
-| **AT3 (partie DevOps)** — Préparer et automatiser le déploiement | Environnement Docker de développement, CI GitHub Actions bloquante, protection de `main`, CD vers une recette dans l'UE | §4.4, §8.1 | 🟡 CI faite · ⏳ CD (T-04) |
+| **AT3 (partie DevOps)** — Préparer et automatiser le déploiement | Environnement Docker de développement, CI GitHub Actions bloquante, protection de `main`, images de production, CD vers la recette sur chaque fusion et vers la production sur tag avec approbation, retour arrière automatique | §4.4, §6.9, §8.1, §8.6 | ✅ CI · ✅ CD écrite et répétée en CI (T-04) · ⏳ mise en service sur le PC |
 
 ---
 
@@ -167,7 +167,8 @@ Règles d'attribution du pool : le premier membre libre prend la feature la mieu
 | #43 | Internationalisation FR / EN : react-i18next, sélecteur, `lang`, erreurs de l'API traduites selon `Accept-Language` | F-02 (#7, fermée) |
 | #44 | Schéma PostgreSQL, contraintes, comptes SGBD, jeu d'essai, sauvegarde et restauration | T-01 (#5, fermée) |
 | #45 | Fonctions et triggers PL/pgSQL défensifs, test de concurrence sur la dernière clé | T-02 (#8, fermée) |
-| (en cours) | Panier Redis (TTL glissant), minuteur de réservation, libération planifiée, Doctrine | F-05 (#11) |
+| #46 | Panier Redis (TTL glissant), minuteur de réservation, libération planifiée, Doctrine | F-05 (#11, fermée) |
+| (en cours) | Livraison continue : images de production, déploiement en recette et en production, retour arrière, hébergement sur un poste du binôme (ADR-0009) | T-04 (#6) |
 
 > ⏳ Les comptes rendus quotidiens (`docs/cr/AAAA-MM-JJ.md`) prévus au CDC §16.1 ne sont pas encore tenus : à démarrer pour alimenter ce paragraphe.
 
@@ -226,9 +227,10 @@ Diagrammes : [cas d'utilisation global](../uml/exports/uc-global.svg), [front-of
 | NoSQL | **Redis 8** (clé/valeur) | BX-01, BX-04, BX-15 | MongoDB : pas de besoin identifié |
 | Authentification | JWT + jeton de rafraîchissement + A2F TOTP | BX-03, BX-07, BX-18 | Session serveur, A2F par SMS |
 | Conteneurs | Docker Compose | BX-21, BX-23 | Installation locale |
+| Hébergement | Poste du binôme, exposé par Tailscale Funnel (ADR-0009) | BX-17, BX-23 | VPS loué (ADR-0005), Cloudflare Tunnel |
 | CI/CD | GitHub Actions | BX-22, BX-23 | GitLab CI |
 
-Chaque décision structurante est tracée dans un **ADR** (contexte, options étudiées, décision, conséquences) : [index des 8 ADR](../adr/README.md).
+Chaque décision structurante est tracée dans un **ADR** (contexte, options étudiées, décision, conséquences) : [index des 9 ADR](../adr/README.md). ADR-0009 remplace ADR-0005 : l'hébergement passe d'un VPS loué à un poste du binôme (§6.9).
 
 ### 6.2 Architecture en couches ✅
 
@@ -271,7 +273,7 @@ La conception (issue C-03, #4) a été livrée par la PR #38, relue et approuvé
 | Sources PlantUML versionnées avec leurs exports | ✅ 17 sources, chacune avec son export PNG et SVG |
 | MCD, MLD et MPD cohérents | ✅ jeu, éditeur, plateforme, utilisateur, commande, ligne de commande et clé de licence présents aux trois niveaux |
 | Séquence de l'achat concurrent | ✅ `seq-achat-concurrent`, avec `FOR UPDATE SKIP LOCKED` |
-| ADR des choix structurants | ✅ 8 ADR au statut « Accepté » (Symfony + React, PostgreSQL + Redis, JWT, chiffrement, hébergement UE, couches, PlantUML, paiement simulé) |
+| ADR des choix structurants | ✅ 8 ADR au statut « Accepté » (Symfony + React, PostgreSQL + Redis, JWT, chiffrement, hébergement UE, couches, PlantUML, paiement simulé) ; l'hébergement a été revu au J3 par ADR-0009 (§6.9) |
 | DICP et patrons de sécurité | ✅ [dicp.md](../securite/dicp.md), [security-patterns.md](../securite/security-patterns.md) |
 
 **Décisions prises par le binôme le 24/11/2026** sur les points restés ouverts (détail : [modèle de données §7](../architecture/modele-donnees.md)) :
@@ -323,6 +325,26 @@ SELECT id FROM cle_licence
 ### 6.8 Environnement de développement ✅
 
 `make init` lance toute la stack : PHP 8.4-FPM, Nginx, PostgreSQL 17 (bases `sidekey` et `sidekey_test`), Redis 8 avec mot de passe, Node 24 pour Vite. Les ports ne sont ouverts que sur `127.0.0.1`. Le front appelle `/api` sur sa propre origine et Vite relaie vers Nginx : pas de CORS en développement.
+
+### 6.9 Déploiement continu ✅ code · ⏳ mise en service (T-04)
+
+**Hébergement** ([ADR-0009](../adr/0009-hebergement-sur-un-poste-du-binome.md)). Le binôme choisit d'héberger la recette et la production sur un PC Windows personnel (WSL2 et Docker Desktop), en France, plutôt que de louer un VPS. ADR-0005 écartait cette option faute d'URL publique stable. **Tailscale Funnel** lève l'objection : une adresse HTTPS fixe en `*.ts.net`, sans aucun port ouvert sur la box, avec un certificat installé sur le PC. Tailscale relaie donc un flux qu'il ne peut pas déchiffrer. Cloudflare Tunnel a été écarté parce qu'il déchiffre le trafic hors du PC.
+
+**Chaîne de livraison** (CDC §15.3) :
+
+| Déclencheur | Workflow | Ce qui se passe |
+|---|---|---|
+| PR | `ci.yml`, job `docker` | Build des deux images de production et **répétition complète du déploiement** sur le runner (registre local, base vide, migrations, test de fumée) |
+| Fusion dans `main`, CI verte | `deploy-staging.yml` | Images `sidekey-api` et `sidekey-web` poussées sur GHCR (`sha-<commit>`), déploiement en recette |
+| Tag `vX.Y.Z` sur `main` | `deploy-production.yml` | Les **mêmes images** reçoivent le tag de version (aucun rebuild), approbation de l'autre membre, déploiement, release et changelog |
+
+Le runner GitHub rejoint le réseau privé Tailscale comme nœud éphémère, puis lance `deploy/deploy.sh` sur le PC par Tailscale SSH. Le dépôt étant public, le binôme n'installe pas de runner GitHub sur le PC : il pourrait exécuter le code d'une PR externe. Les secrets vivent dans les environnements GitHub `staging` et `production`, et le `.env` du PC est réécrit à chaque déploiement.
+
+**Images de production** : php-fpm sans Xdebug, dépendances `--no-dev`, cache Symfony réchauffé au build, utilisateur `www-data`. Le front est construit par Vite et servi par Caddy, qui relaie `/api/*` en FastCGI et ajoute HSTS, la CSP et les autres en-têtes de sécurité. Seul Caddy est publié, sur `127.0.0.1`. PostgreSQL, Redis, l'API et le worker sont sur un réseau Docker interne sans accès à Internet, et l'API se connecte avec `sk_app`, les migrations avec `sk_owner`.
+
+**Retour arrière** : sauvegarde `pg_dump -Fc` avant chaque migration. Si le test de fumée `/api/health/ready` échoue, la version précédente est remise automatiquement. `deploy.sh rollback` et `deploy.sh restore` couvrent les autres cas ([guide d'exploitation](../exploitation/deploiement.md)).
+
+**Limites assumées** : l'application n'est disponible que PC allumé, et les sauvegardes sont sur le même disque, donc à copier ailleurs pour tenir le RPO de 24 h (L-02). Tailscale voit les adresses IP des visiteurs : ce transfert de métadonnées est à inscrire au registre RGPD.
 
 ---
 
@@ -478,7 +500,29 @@ END IF;
 
 Une clé vendue est ensuite protégée par `trg_cle_licence_protection` : toute modification ou suppression lève `SK003`, sauf l'enregistrement de la première révélation par l'acheteur.
 
-### 8.6 Extraits à ajouter ⏳
+### 8.6 Un déploiement qui revient seul en arrière (T-04)
+
+`deploy/deploy.sh` (extrait simplifié) — la nouvelle version n'est gardée que si la sonde `/api/health/ready` répond, à travers Caddy et php-fpm, avec PostgreSQL et Redis joignables. Sinon, la version précédente est remise en place, sans intervention.
+
+```bash
+demarrer_version "$nouvelle"
+
+if test_de_fumee; then
+    [ -n "$ancienne" ] && [ "$ancienne" != "$nouvelle" ] && printf '%s\n' "$ancienne" >"$ETAT/version-precedente"
+    printf '%s\n' "$nouvelle" >"$ETAT/version-courante"
+    return 0
+fi
+
+if [ -n "$ancienne" ]; then
+    erreur "retour automatique à la version $ancienne (les migrations déjà passées restent appliquées)"
+    demarrer_version "$ancienne"
+fi
+exit 1
+```
+
+La sauvegarde est prise **avant** les migrations : c'est elle que `deploy.sh restore` recharge si une migration abîme les données. La répétition du déploiement en CI a trouvé un vrai défaut avant la première mise en service : les migrations de T-01, jusque-là jouées seulement par `psql`, échouaient sous Doctrine. PostgreSQL refuse plusieurs commandes dans une requête préparée, et ces migrations envoient donc leurs fichiers SQL avec `executeStatement()`.
+
+### 8.7 Extraits à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
 |---|---|---|
@@ -506,9 +550,9 @@ Une clé vendue est ensuite protégée par `trg_cle_licence_protection` : toute 
 
 | Partie | Tests | Résultat |
 |---|---|---|
-| API | 3 unitaires + 2 d'intégration sur `/api/health` (réponse, absence de cache, aucune fuite, `POST` refusé en 405) | 5 / 5 ✅ |
+| API | 59 tests PHPUnit, unitaires et d'intégration avec PostgreSQL et Redis réels : sondes `/api/health` et `/api/health/ready` (aucune fuite de détail en cas de panne), i18n des erreurs, panier, réservation et stock | 59 / 59 ✅ |
 | Front | 4 tests du client HTTP + 2 tests de rendu | 6 / 6 ✅ |
-| CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml` | Verte sur les PR #37, #38, #39 |
+| CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation des fichiers compose, ShellCheck, tests SQL de la base, build des images de production et répétition du déploiement | Verte sur toutes les PR fusionnées |
 
 ### 9.3 Jeu d'essai de la fonctionnalité la plus représentative ⏳
 
@@ -563,12 +607,13 @@ Gabarit :
 | Expression des besoins | CDC v1.2, 7 personas, 24 besoins, user stories MoSCoW, règles de gestion | [CDC](../cahier_des_charges_v1.2_SideKey.md) |
 | Gestion de projet | Backlog de 36 éléments dans GitHub Projects, conventions Git, branches par tâche, PR relues | Issues #1–#36, PR #37–#44 |
 | Maquettes | 16 écrans desktop FR dans Figma, composants FR / EN, inventaire, enchaînement ; textes FR → EN de E01 à E08, spécification mobile, grille de revue persona | [docs/maquettes](../maquettes/ecrans.md) |
-| Conception | 8 ADR, 17 diagrammes PlantUML, architecture en couches, MCD / MLD / MPD commentés ; C-03 fermée, critères revérifiés (§6.5) | [docs/adr](../adr/README.md), [docs/uml](../uml/README.md), [docs/architecture](../architecture/README.md) |
+| Conception | 9 ADR, 17 diagrammes PlantUML, architecture en couches, MCD / MLD / MPD commentés ; C-03 fermée, critères revérifiés (§6.5) | [docs/adr](../adr/README.md), [docs/uml](../uml/README.md), [docs/architecture](../architecture/README.md) |
 | Sécurité (conception) | Analyse DICP, patrons de sécurité, mapping OWASP | [docs/securite](../securite/README.md) |
 | Socle technique | Monorepo Symfony 7.4 / React 19, Docker Compose de dev, Makefile | `compose.yaml`, `Makefile` |
 | CI | Jobs api / front / docker / database, `ci-success`, `pr-title`, audits bloquants | `.github/workflows/` |
 | Base de données | Schéma PostgreSQL (21 tables), contraintes et index, comptes SGBD à moindre privilège, jeu d'essai, sauvegarde et restauration testées (T-01) ; fonctions et triggers défensifs, test de concurrence (T-02) | `api/sql/`, `api/tests/Database/` |
 | Internationalisation | Front FR / EN (sélecteur mémorisé, `lang`, clés typées, parité testée) ; erreurs de l'API traduites selon `Accept-Language` (F-02) | `front/src/i18n/`, `api/translations/` |
+| Livraison continue | Images de production (api, web), CD recette sur chaque fusion, CD production sur tag avec approbation, retour arrière automatique, sauvegarde et restauration, ADR-0009 (T-04, partie code) | `deploy/`, `.github/workflows/deploy-*.yml`, [guide](../exploitation/deploiement.md) |
 | Panier et réservation | API du panier sur Redis, règles de quantité et de stock, minuteur de réservation, libération planifiée des réservations expirées (F-05) | `api/src/Service/Panier/`, `api/src/Infrastructure/Redis/` |
 
 ### 13.2 Pas encore fait
@@ -578,7 +623,7 @@ Gabarit :
 | Maquettes | Mobile (E02, E03, E04, E07), parcours EN (E01 → E08), revue persona | C-02 (#3) |
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
-| Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
+| Déploiement | Mise en service : PC (WSL2, utilisateur `deploy`, Tailscale Funnel et SSH), environnements GitHub `staging` et `production` avec secrets et approbateur ; copie des sauvegardes hors du PC | T-04 (#6), partie 2 ; L-02 |
 | Features | Catalogue, authentification, A2F, commande et concurrence, paiement, clés, back-office | F-01, F-03, F-04, F-06 à F-10 |
 | Dossier | Comptes rendus quotidiens, veille (§10), recherche anglophone (§11), extraits métier (§8.6), jeu d'essai (§9.3), captures, bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
@@ -588,6 +633,7 @@ Gabarit :
 - **Planning** : les features métier (F-01 à F-10) n'ont pas commencé, alors que le socle et la conception sont faits ; c'est la priorité absolue pour la suite.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
 - **Dossier individuel** : les §4.3, §10, §11 et §12 doivent être personnalisés par chaque candidat.
+- **Hébergement** : recette et production n'existent que PC allumé ; à prévoir avant chaque démo du soir et pour la soutenance (ADR-0009).
 - **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle est devenue vraie avec la fusion de la PR #41.
 
 ---
