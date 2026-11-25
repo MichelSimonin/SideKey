@@ -166,7 +166,8 @@ Règles d'attribution du pool : le premier membre libre prend la feature la mieu
 | #42 | Décisions sur les 4 points ouverts du modèle de données | C-03 (#4) |
 | #43 | Internationalisation FR / EN : react-i18next, sélecteur, `lang`, erreurs de l'API traduites selon `Accept-Language` | F-02 (#7, fermée) |
 | #44 | Schéma PostgreSQL, contraintes, comptes SGBD, jeu d'essai, sauvegarde et restauration | T-01 (#5, fermée) |
-| (en cours) | Fonctions et triggers PL/pgSQL défensifs, test de concurrence sur la dernière clé | T-02 (#8) |
+| #45 | Fonctions et triggers PL/pgSQL défensifs, test de concurrence sur la dernière clé | T-02 (#8, fermée) |
+| (en cours) | Panier Redis (TTL glissant), minuteur de réservation, libération planifiée, Doctrine | F-05 (#11) |
 
 > ⏳ Les comptes rendus quotidiens (`docs/cr/AAAA-MM-JJ.md`) prévus au CDC §16.1 ne sont pas encore tenus : à démarrer pour alimenter ce paragraphe.
 
@@ -286,7 +287,7 @@ Aucune de ces décisions ne change la structure des tables : T-01 peut démarrer
 
 Les points de la définition de terminé liés au code (tests, FR / EN, validation par couche, déploiement en recette) ne s'appliquent pas à un ticket de conception.
 
-### 6.6 NoSQL : Redis ✅ conception · ⏳ implémentation
+### 6.6 NoSQL : Redis ✅ conception · 🟡 implémentation (panier et réservation : F-05)
 
 | Usage | Clé | TTL |
 |---|---|---|
@@ -297,6 +298,13 @@ Les points de la définition de terminé liés au code (tests, FR / EN, validati
 | Cache catalogue | `cache:jeu:{slug}:{langue}` | 5 min |
 
 Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des paniers et des sessions, jamais une commande ni une clé.
+
+**Réalisé (F-05)** :
+- **Panier** (`RedisPanierStore`) : un hash par panier (offre → quantité). Écriture et expiration partent dans une même transaction `MULTI` / `EXEC`, et chaque écriture repousse l'expiration : un panier abandonné disparaît seul, sans tâche de purge. Le panier ne contient que des identifiants et des quantités ; prix, titres et stock sont relus dans PostgreSQL à chaque affichage, et le total est calculé côté serveur (RG-11).
+- **Règles** (`PanierService`) : 5 clés au plus par offre (RG-14), jamais plus que le stock disponible, 20 offres au plus ; une offre retirée de la vente ou en rupture disparaît du panier et le client en est informé.
+- **Visiteur** : panier identifié par un cookie opaque (uuid aléatoire), `HttpOnly`, `Secure`, `SameSite=Strict` ; une valeur forgée est ignorée et ne peut pas désigner une autre clé Redis.
+- **Réservation** : minuteur `resa:{commandeId}` aligné sur l'échéance de la commande ; l'expiration réelle reste en base, appliquée chaque minute par une tâche planifiée (Symfony Scheduler, service `worker`) qui appelle `fn_liberer_reservations_expirees`.
+- **Tests** : composant Redis contre un vrai serveur (TTL, expiration réelle, transaction), accès SQL sur la base de test, API de bout en bout ; PostgreSQL et Redis tournent dans la CI.
 
 ### 6.7 Concurrence et transactions ✅ conception · ⏳ implémentation
 
@@ -561,6 +569,7 @@ Gabarit :
 | CI | Jobs api / front / docker / database, `ci-success`, `pr-title`, audits bloquants | `.github/workflows/` |
 | Base de données | Schéma PostgreSQL (21 tables), contraintes et index, comptes SGBD à moindre privilège, jeu d'essai, sauvegarde et restauration testées (T-01) ; fonctions et triggers défensifs, test de concurrence (T-02) | `api/sql/`, `api/tests/Database/` |
 | Internationalisation | Front FR / EN (sélecteur mémorisé, `lang`, clés typées, parité testée) ; erreurs de l'API traduites selon `Accept-Language` (F-02) | `front/src/i18n/`, `api/translations/` |
+| Panier et réservation | API du panier sur Redis, règles de quantité et de stock, minuteur de réservation, libération planifiée des réservations expirées (F-05) | `api/src/Service/Panier/`, `api/src/Infrastructure/Redis/` |
 
 ### 13.2 Pas encore fait
 
@@ -570,7 +579,7 @@ Gabarit :
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | Catalogue, authentification, A2F, panier, commande et concurrence, paiement, clés, back-office | F-01, F-03 à F-10 |
+| Features | Catalogue, authentification, A2F, commande et concurrence, paiement, clés, back-office | F-01, F-03, F-04, F-06 à F-10 |
 | Dossier | Comptes rendus quotidiens, veille (§10), recherche anglophone (§11), extraits métier (§8.6), jeu d'essai (§9.3), captures, bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 

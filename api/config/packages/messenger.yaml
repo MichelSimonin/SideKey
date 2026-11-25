@@ -1,0 +1,7 @@
+framework:
+    messenger:
+        # Les tâches planifiées (src/Schedule.php) passent par le transport « scheduler_default »,
+        # consommé par le service « worker » de compose.yaml :
+        #   php bin/console messenger:consume scheduler_default
+        transports:
+            sync: 'sync://'

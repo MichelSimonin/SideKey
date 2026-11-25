@@ -12,3 +12,9 @@ error:
     unprocessable: 'Certaines données sont invalides.'
     too_many_requests: 'Trop de tentatives. Réessayez plus tard.'
     internal: 'Erreur interne.'
+    # Erreurs métier (exceptions App\Exception)
+    stock_insuffisant: 'Stock insuffisant : %disponible% clé(s) disponible(s) pour cette offre.'
+    quantite_maximale: '%maximum% clés au maximum par offre et par commande.'
+    panier_plein: 'Votre panier contient déjà %maximum% offres différentes.'
+    offre_indisponible: "Cette offre n'existe pas ou n'est plus en vente."
+    commande_non_reservable: "Cette commande n'accepte plus de réservation : elle a expiré ou est close."

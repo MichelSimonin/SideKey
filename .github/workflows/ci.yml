@@ -22,6 +22,35 @@ jobs:
     defaults:
       run:
         working-directory: api
+    # Tests d'intégration : PostgreSQL (stock, réservations) et Redis (panier, minuteur), jetables
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres   # base jetable de la CI, sans lien avec un vrai secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # En test, Doctrine ajoute le suffixe _test : les tests utilisent la base sidekey_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sidekey?serverVersion=17&charset=utf8
+      REDIS_URL: redis://localhost:6379
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v5
         with:
@@ -57,6 +86,9 @@ jobs:
         run: |
           php bin/console lint:yaml config --parse-tags
           php bin/console lint:container
+
+      - name: Base de test (schéma, fonctions, triggers et jeu d'essai)
+        run: PGDATABASE=sidekey_test sh sql/bin/db-seed.sh --reset
 
       - name: Tests PHPUnit
         run: php bin/phpunit --testdox

@@ -11,3 +11,9 @@ error:
     unprocessable: 'Some data is invalid.'
     too_many_requests: 'Too many attempts. Please try again later.'
     internal: 'Internal error.'
+    # Business errors (App\Exception)
+    stock_insuffisant: 'Not enough stock: %disponible% key(s) available for this offer.'
+    quantite_maximale: 'At most %maximum% keys per offer and per order.'
+    panier_plein: 'Your cart already holds %maximum% different offers.'
+    offre_indisponible: 'This offer does not exist or is no longer for sale.'
+    commande_non_reservable: 'This order no longer accepts reservations: it has expired or is closed.'

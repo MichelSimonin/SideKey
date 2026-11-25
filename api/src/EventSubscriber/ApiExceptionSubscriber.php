@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\EventSubscriber;
 
+use App\Exception\ExceptionMetier;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -13,6 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
@@ -71,7 +73,12 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
         $locale = $this->resolveLocale($request);
 
-        if ($status >= 500) {
+        if ($exception instanceof ExceptionMetier) {
+            // Exception métier : code HTTP et message fonctionnel traduit (architecture-couches.md §4)
+            $status = $exception->codeHttp();
+            $body = ['message' => $this->translator->trans($exception->cleMessage(), $exception->parametres(), 'errors', $locale)]
+                + $exception->details();
+        } elseif ($status >= 500) {
             $correlationId = bin2hex(random_bytes(8));
             $this->logger->error('Erreur interne de l\'API', [
                 'correlationId' => $correlationId,
@@ -86,12 +93,18 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         } else {
             $key = self::MESSAGES[$status] ?? 'error.bad_request';
             $body = ['message' => $this->translator->trans($key, [], 'errors', $locale)];
+            $erreurs = $this->erreursDeValidation($exception);
+            if ([] !== $erreurs) {
+                $body['erreurs'] = $erreurs;   // 422 : { "erreurs": { "champ": "message" } }
+            }
         }
 
         $response = new JsonResponse($body, $status);
         $response->headers->set('Cache-Control', 'no-store');
         $response->headers->set('Content-Language', $locale);
-        $response->setVary('Accept-Language', false);
+        if (!\in_array('Accept-Language', $response->getVary(), true)) {
+            $response->setVary('Accept-Language', false);
+        }
         if ($exception instanceof HttpExceptionInterface) {
             foreach (self::FORWARDED_HEADERS as $name) {
                 if (isset($exception->getHeaders()[$name])) {
@@ -125,5 +138,27 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
         $asked = array_map(static fn (string $tag): string => strtolower(substr($tag, 0, 2)), $request->getLanguages());
 
         return null !== $preferred && \in_array(substr($preferred, 0, 2), $asked, true) ? $preferred : $this->defaultLocale;
+    }
+
+    /**
+     * Erreurs de validation d'un DTO (#[MapRequestPayload]) : champ → message traduit par le
+     * validateur dans la langue de la requête. La valeur saisie n'est jamais renvoyée.
+     *
+     * @return array<string, string>
+     */
+    private function erreursDeValidation(\Throwable $exception): array
+    {
+        $echec = $exception->getPrevious();
+        if (!$echec instanceof ValidationFailedException) {
+            return [];
+        }
+
+        $erreurs = [];
+        foreach ($echec->getViolations() as $violation) {
+            $champ = $violation->getPropertyPath() ?: 'corps';
+            $erreurs[$champ] ??= (string) $violation->getMessage();
+        }
+
+        return $erreurs;
     }
 }
