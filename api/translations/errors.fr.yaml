@@ -23,3 +23,6 @@ error:
     session_invalide: 'Session expirée ou invalide. Veuillez vous reconnecter.'
     email_deja_utilise: 'Un compte existe déjà avec cet e-mail.'
     mot_de_passe_invalide: 'Le mot de passe ne respecte pas la politique de sécurité (12 à 128 caractères).'
+    # Catalogue (F-01)
+    jeu_introuvable: "Ce jeu n'existe pas ou n'est plus au catalogue."
+    page_introuvable: "Cette page de résultats n'existe pas."

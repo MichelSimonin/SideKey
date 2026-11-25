@@ -22,3 +22,6 @@ error:
     session_invalide: 'Session expired or invalid. Please sign in again.'
     email_deja_utilise: 'An account already exists with this e-mail.'
     mot_de_passe_invalide: 'The password does not meet the security policy (12 to 128 characters).'
+    # Catalogue (F-01)
+    jeu_introuvable: 'This game does not exist or is no longer in the catalogue.'
+    page_introuvable: 'This results page does not exist.'
