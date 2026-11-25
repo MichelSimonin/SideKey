@@ -9,3 +9,5 @@ name:
     forbidden_characters: 'Ce champ contient des caractères interdits.'
 consent:
     required: 'Vous devez accepter les conditions pour créer un compte.'
+price:
+    range: 'Le prix minimum doit être inférieur ou égal au prix maximum.'

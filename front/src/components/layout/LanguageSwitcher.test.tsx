@@ -44,6 +44,7 @@ describe('LanguageSwitcher', () => {
 
     await userEvent.tab() // lien d'évitement
     await userEvent.tab() // logo
+    await userEvent.tab() // lien « Catalogue »
     await userEvent.tab() // lien « Connexion » du compte
     await userEvent.tab() // FR
     await userEvent.tab() // EN

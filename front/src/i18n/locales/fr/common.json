@@ -10,11 +10,14 @@
       "label": "Langue",
       "fr": "Français",
       "en": "English"
-    }
+    },
+    "catalogue": "Catalogue",
+    "mainNav": "Navigation principale"
   },
   "home": {
     "title": "Vos clés de jeux, livrées tout de suite",
-    "subtitle": "Achetez une clé, elle s'affiche dès le paiement. Aucune clé n'est vendue deux fois."
+    "subtitle": "Achetez une clé, elle s'affiche dès le paiement. Aucune clé n'est vendue deux fois.",
+    "cta": "Voir le catalogue"
   },
   "footer": {
     "copyright": "© SideKey — projet de formation CDA",
@@ -63,5 +66,78 @@
       "rateLimited": "Trop de tentatives. Réessayez dans {{minutes}} min."
     },
     "secondFactor": "Ce compte est protégé par la double authentification. La saisie du code sera disponible prochainement."
+  },
+  "catalogue": {
+    "title": "Catalogue",
+    "loading": "Chargement du catalogue…",
+    "error": "Le catalogue est momentanément indisponible. Veuillez réessayer dans un instant.",
+    "retry": "Réessayer",
+    "none": "Aucun jeu ne correspond à votre recherche. Modifiez ou réinitialisez les filtres.",
+    "results_one": "{{count}} jeu trouvé",
+    "results_other": "{{count}} jeux trouvés",
+    "pageOutOfRange": "Cette page de résultats n'existe pas.",
+    "firstPage": "Revenir à la première page",
+    "filters": {
+      "legend": "Affiner la recherche",
+      "search": "Rechercher un titre",
+      "platforms": "Plateformes",
+      "genres": "Genres",
+      "price": "Prix (en euros)",
+      "priceMin": "Minimum",
+      "priceMax": "Maximum",
+      "pegi": "Classification PEGI maximale",
+      "pegiAll": "Tous les âges",
+      "pegiOption": "PEGI {{age}}",
+      "sort": "Trier par",
+      "apply": "Appliquer les filtres",
+      "reset": "Réinitialiser les filtres",
+      "loading": "Chargement des filtres…"
+    },
+    "sorts": {
+      "titre": "Titre (A à Z)",
+      "nouveaute": "Nouveautés",
+      "prix_asc": "Prix croissant",
+      "prix_desc": "Prix décroissant",
+      "note": "Mieux notés"
+    },
+    "card": {
+      "from": "À partir de {{price}}",
+      "available": "Disponible",
+      "soldOut": "Rupture de stock",
+      "pegi": "PEGI {{age}}",
+      "platforms": "Plateformes : {{list}}",
+      "rating": "Note {{rating}} sur 5 ({{count}} avis)",
+      "noRating": "Pas encore noté"
+    },
+    "pagination": {
+      "label": "Pagination des résultats",
+      "previous": "Page précédente",
+      "next": "Page suivante",
+      "page": "Page {{page}}",
+      "current": "Page {{page}} sur {{total}}"
+    }
+  },
+  "game": {
+    "loading": "Chargement de la fiche…",
+    "coverAlt": "Jaquette de {{title}}",
+    "noCover": "Pas de jaquette",
+    "pegi": "PEGI {{age}} : à partir de {{age}} ans",
+    "publisher": "Éditeur",
+    "releaseDate": "Date de sortie",
+    "genres": "Genres",
+    "offers": "Offres par plateforme",
+    "stock_one": "{{count}} clé disponible",
+    "stock_other": "{{count}} clés disponibles",
+    "outOfStock": "Rupture de stock",
+    "addToCart": "Ajouter au panier",
+    "addToCartFor": "Ajouter au panier : {{title}} sur {{platform}}",
+    "adding": "Ajout en cours…",
+    "added": "Ajouté au panier.",
+    "addError": "Impossible d'ajouter cette offre au panier.",
+    "rating": "Note moyenne : {{rating}} / 5 ({{count}} avis)",
+    "noReviews": "Aucun avis pour le moment",
+    "notFoundTitle": "Jeu introuvable",
+    "notFoundText": "Ce jeu n'existe pas ou n'est plus au catalogue.",
+    "back": "Retour au catalogue"
   }
 }

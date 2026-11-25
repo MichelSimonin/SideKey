@@ -263,3 +263,228 @@ main {
   opacity: 0.6;
   cursor: progress;
 }
+
+/* --- Navigation principale et utilitaires ------------------------------------------------------- */
+.main-nav a,
+.account-nav a {
+  color: var(--sk-brand);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--sk-border);
+  border-radius: 0.25rem;
+  font-weight: 600;
+}
+
+/* --- Catalogue (E02) et fiche (E03) --------------------------------------------------------------- */
+.catalogue-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 60rem) {
+  .catalogue-layout {
+    grid-template-columns: 16rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.filters fieldset {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem 0.25rem;
+  border: 1px solid var(--sk-border);
+  border-radius: 0.5rem;
+}
+
+.filters legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.filters select {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem;
+  border: 1px solid #6b7280;
+  border-radius: 0.5rem;
+  background: var(--sk-bg);
+  color: var(--sk-text);
+  font: inherit;
+}
+
+.price-range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.result-count {
+  min-height: 1.5rem;
+  margin: 0 0 1rem;
+  font-weight: 600;
+}
+
+.game-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--sk-border);
+  border-radius: 0.5rem;
+}
+
+.game-card h2 {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
+}
+
+.game-card p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+  background: #f3f4f6;
+}
+
+.cover-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sk-muted);
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.game-price {
+  font-weight: 700;
+}
+
+.stock-ok {
+  color: #166534;
+  font-weight: 600;
+}
+
+.stock-out {
+  color: var(--sk-error);
+  font-weight: 600;
+}
+
+.pagination ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pagination a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  justify-content: center;
+  padding: 0 0.75rem;
+  border: 1px solid var(--sk-border);
+  border-radius: 0.5rem;
+  color: var(--sk-text);
+  text-decoration: none;
+}
+
+.pagination a[aria-current='page'] {
+  border-color: var(--sk-brand);
+  background: var(--sk-brand);
+  color: #fff;
+}
+
+.game-layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 48rem) {
+  .game-layout {
+    grid-template-columns: 16rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.game-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+}
+
+.game-facts dt {
+  font-weight: 600;
+}
+
+.game-facts dd {
+  margin: 0;
+}
+
+.game-description {
+  max-width: 65ch;
+  white-space: pre-line;
+}
+
+.offers {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.offer {
+  padding: 0.75rem;
+  border: 1px solid var(--sk-border);
+  border-radius: 0.5rem;
+}
+
+.offer h3,
+.offer p {
+  margin: 0 0 0.5rem;
+}

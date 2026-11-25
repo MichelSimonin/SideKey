@@ -18,6 +18,9 @@ export function Layout({ children }: { children: ReactNode }) {
         <Link to="/" className="logo" aria-label={t('header.home')}>
           SideKey
         </Link>
+        <nav aria-label={t('header.mainNav')} className="main-nav">
+          <Link to="/catalogue">{t('header.catalogue')}</Link>
+        </nav>
         <div className="header-actions">
           <nav aria-label={t('header.nav')} className="account-nav">
             {status === 'authenticated' && user ? (

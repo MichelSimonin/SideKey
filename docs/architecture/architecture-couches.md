@@ -71,8 +71,8 @@ api/src/
 ### 3.1 Lecture `GET /api/jeux/{slug}` (cache Redis)
 
 1. **Proxy** : TLS, en-tête `Accept-Language` transmis.
-2. **Présentation** : `JeuController::show(string $slug)`, paramètre `slug` validé par un
-   DTO ; route publique.
+2. **Présentation** : `JeuController::fiche(string $slug)`, paramètre `slug` contraint par la
+   route puis revérifié par le service ; route publique.
 3. **Métier** : `CatalogueService::fiche($slug, Langue $langue)`.
 4. **Données** : lecture de `cache:jeu:{slug}:{langue}` dans Redis (TTL 5 min) ; en cas de
    défaut, `JeuRepository` interroge PostgreSQL puis le service alimente le cache.
@@ -146,5 +146,32 @@ retourné par l'API (`US-13`), jamais un calcul local.
 
 - Pas de CQRS ni de bus d'événements : un service, une transaction.
 - Le worker Messenger traite l'import lourd et les e-mails ; **pas** de saga distribuée.
-- Le cache Redis du catalogue est invalidé par TTL (5 min), pas par événement : un prix
-  modifié peut mettre jusqu'à 5 minutes à apparaître sur la fiche.
+- Le cache Redis du catalogue (F-01) est **invalidé explicitement par toute écriture du
+  catalogue** et, en filet de sécurité, par son TTL de 5 min (voir §7.1). Tant qu'une écriture
+  n'appelle pas `CatalogueCache`, un prix modifié peut mettre jusqu'à 5 minutes à apparaître.
+- La disponibilité affichée dans le catalogue est **indicative** (au plus 5 min de retard) :
+  la vérité est relue en base à l'ajout au panier et à la réservation (RG-02, RG-04).
+
+### 7.1 Cache du catalogue : clés, invalidation, panne
+
+| Clé | Contenu | TTL |
+|---|---|---|
+| `cache:jeu:{slug}:{langue}` | fiche d'un jeu (JSON) | 5 min |
+| `cache:jeux:v{n}:{langue}:{empreinte}` | une liste filtrée ; `{empreinte}` = SHA-256 des critères normalisés | 5 min |
+| `cache:filtres:v{n}:{langue}` | plateformes, genres et fourchette de prix des filtres | 5 min |
+| `cache:jeux:version` | compteur `{n}` incrémenté par `invaliderListes()` | aucun |
+
+- **Qui invalide.** `Service/Catalogue/CatalogueCache` expose `invaliderJeu(slug)` (la fiche, dans
+  les deux langues) et `invaliderListes()` (toutes les listes et les valeurs de filtres, en O(1)
+  par changement de version ; les anciennes entrées expirent seules). **Toute écriture qui modifie
+  le catalogue appelle les deux** : jeu, traduction, genre, offre ou prix (F-09), import de clés
+  (F-08), réservation et vente de clés (F-06), modération d'un avis (note moyenne). Le
+  back-office F-09 s'y branche ; le TTL n'est qu'un filet.
+- **Pourquoi une version.** Supprimer « toutes les listes » demanderait un `SCAN` ou un index de
+  clés. Une version dans la clé rend les anciennes listes inatteignables sans rien supprimer.
+- **Panne de Redis.** Le cache n'est qu'une optimisation de données publiques : en cas
+  d'indisponibilité, les lectures retombent sur PostgreSQL et l'incident est journalisé. Contraste
+  voulu avec l'authentification (§4, ADR-0003), où l'indisponibilité de Redis *refuse*.
+- **Ce qui n'est jamais mis en cache.** Les 404 (un client ne peut pas inonder Redis de clés) et
+  toute valeur non validée : seuls un slug conforme, la langue de l'énumération et une empreinte
+  entrent dans une clé.
