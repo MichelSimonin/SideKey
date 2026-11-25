@@ -78,6 +78,24 @@ L'API délivre deux jetons. Le **jeton d'accès** est un JWT signé (RS256 ou ES
 - P-04 (réinitialisation) et P-06 (A2F client) réutilisent le même socle.
 - Documentation : politique de mot de passe, cycle de vie des jetons et protection CSRF repris dans le dossier de projet au titre du §11.4.
 
+## Mise en œuvre (F-03)
+
+Points que la décision laissait ouverts et que l'implémentation a tranchés. Aucun ne remet la décision en cause.
+
+| Point | Choix | Raison |
+|---|---|---|
+| Stockage du jeton de rafraîchissement | Seule l'**empreinte SHA-256** est stockée (`refresh:{jti}` avec `jti` = empreinte) ; le jeton est tiré de `random_bytes(32)` | Un export ou une lecture de Redis ne livre aucune session utilisable |
+| Rotation et réutilisation | Script **Lua** : `refresh:{jti}` supprimé, `refresh:used:{jti}` posé, successeur créé dans la même exécution ; `refresh:family:{id}` liste les membres | Atomicité : deux requêtes simultanées avec le même jeton ne réussissent pas toutes deux |
+| Effet d'une réutilisation | Tous les jetons actifs de la famille sont supprimés **et** `jwt:deny:fam:{id}` refuse les jetons d'accès déjà émis (15 min) | Sans cela, le voleur garderait un jeton d'accès valide jusqu'à 15 min |
+| Famille dans le jeton d'accès | Revendication `fam` ; `typ` porte la portée (`access` ou `a2f`) ; `jti` aléatoire | La déconnexion révoque la session sans lire le cookie : son `Path` (`/api/token/refresh`) l'empêche d'être envoyé à `/api/deconnexion` |
+| Course entre deux onglets (risque noté plus haut) | Côté SPA : un seul rafraîchissement à la fois par onglet (promesse partagée) et entre onglets (Web Locks) ; le second repart du cookie déjà renouvelé. Pas de fenêtre de grâce côté serveur | Une fenêtre de grâce affaiblit la détection de vol ; le verrou client suffit pour les navigateurs courants |
+| CSRF de la route à cookie | `SameSite=Strict`, `Origin` obligatoire et conforme à `CORS_ALLOW_ORIGIN`, **double soumission signée** : `X-CSRF-Token` = cookie `sk_csrf` = HMAC-SHA256 du refresh. Une requête refusée ne consomme pas le jeton | Une double soumission « naïve » est contournable par injection de cookie depuis un sous-domaine ; le HMAC lie la valeur à la session |
+| Algorithme de hachage | `argon2id` **nommé explicitement** | Constaté : `auto` produit du bcrypt avec Symfony 7.4 |
+| Jeton intermédiaire A2F | JWT `typ: a2f`, 5 min, sans refresh ; **refusé par le pare-feu sur toutes les routes** ; la saisie du code est l'objet de F-04 | Un jeton à portée limitée mal validé ouvrirait l'API sans second facteur : le refus est testé |
+| Panne de Redis | Jeton d'accès refusé (impossible de prouver qu'il n'est pas révoqué) ; connexion et rafraîchissement en 500 générique | Fail Securely, comme décidé |
+| Rôles | Relus **en base à chaque requête** (`UtilisateurProvider`) ; les rôles du jeton ne servent jamais à décider | Retirer un rôle ou désactiver un compte prend effet aussitôt |
+| Limitation de débit | Compteur Redis maison (`INCR` + `EXPIRE` en Lua), clés `rl:login:{ip}` (10 / 15 min) et `rl:register:{ip}` (5 / h) ; pas de `symfony/rate-limiter` | Les clés de ce composant sont hachées : elles ne correspondent pas au CDC §9.8 |
+
 ## Références
 
 - [Cahier des charges v1.2](../cahier_des_charges_v1.2_SideKey.md) — §0.2 (B2, B3, B9), §5.3 (US-20 à US-25), §9.8, §11.1, §11.2, §11.4, §14.4, §18.

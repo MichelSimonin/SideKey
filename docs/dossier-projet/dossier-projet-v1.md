@@ -200,6 +200,8 @@ Diagrammes : [cas d'utilisation global](../uml/exports/uc-global.svg), [front-of
 - 📝 Préparés : [spécification des écrans mobiles](../maquettes/mobile.md) (E02, E03, E04, E07), [textes FR → EN](../maquettes/traduction-en.md) du parcours E01 → E08, [grille de revue persona](../maquettes/revue-persona.md).
 - ⏳ Restent : dessiner le **mobile** et le **parcours EN** dans Figma, puis faire la **revue persona** à deux.
 
+- ✅ **Réalisé dans le front** : **E05** connexion / inscription (F-03), `front/src/features/auth/` ; routes `/connexion` et `/inscription`. Accessibilité : étiquettes visibles reliées aux champs, `autocomplete` adapté (`username`, `current-password`, `new-password`, `given-name`, `family-name`, `email`), erreurs reliées par `aria-describedby` et `aria-invalid`, résumé des erreurs annoncé (`role="alert"`) et focalisé, vue active signalée par `aria-current`, décompte de caractères annoncé poliment, aucune limite de temps, mot de passe affichable. FR et EN complets.
+
 > ⏳ Insérer ici les captures des écrans clés (E02 catalogue, E03 fiche jeu, E07 paiement, E14 commandes à vérifier) exportées de Figma.
 
 ### 5.3 Exigences transverses ✅
@@ -287,14 +289,15 @@ Aucune de ces décisions ne change la structure des tables : T-01 peut démarrer
 
 Les points de la définition de terminé liés au code (tests, FR / EN, validation par couche, déploiement en recette) ne s'appliquent pas à un ticket de conception.
 
-### 6.6 NoSQL : Redis ✅ conception · 🟡 implémentation (panier et réservation : F-05)
+### 6.6 NoSQL : Redis ✅ conception · 🟡 implémentation (panier et réservation : F-05 ; jetons, révocation, débit : F-03)
 
 | Usage | Clé | TTL |
 |---|---|---|
 | Panier | `cart:{userId}` / `cart:anon:{uuid}` | 7 j / 24 h |
 | Réservation des clés | `resa:{commandeId}` | 15 min |
-| Jetons de rafraîchissement / révocation | `refresh:{jti}`, `jwt:deny:{jti}` | 7 j / durée restante |
-| Limitation de débit, anti-fraude | `rl:login:{ip}`, `fraud:keys24h:{userId}` | 15 min à 24 h |
+| Jetons de rafraîchissement | `refresh:{jti}` → `userId:familleId` ; `refresh:used:{jti}` → `familleId` ; `refresh:family:{familleId}` (ensemble) | 7 j |
+| Révocation des jetons d'accès | `jwt:deny:{jti}` ; `jwt:deny:fam:{familleId}` | durée restante / 15 min |
+| Limitation de débit, anti-fraude | `rl:login:{ip}`, `rl:register:{ip}`, `fraud:keys24h:{userId}` | 15 min / 1 h / 24 h |
 | Cache catalogue | `cache:jeu:{slug}:{langue}` | 5 min |
 
 Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des paniers et des sessions, jamais une commande ni une clé.
@@ -305,6 +308,13 @@ Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des pa
 - **Visiteur** : panier identifié par un cookie opaque (uuid aléatoire), `HttpOnly`, `Secure`, `SameSite=Strict` ; une valeur forgée est ignorée et ne peut pas désigner une autre clé Redis.
 - **Réservation** : minuteur `resa:{commandeId}` aligné sur l'échéance de la commande ; l'expiration réelle reste en base, appliquée chaque minute par une tâche planifiée (Symfony Scheduler, service `worker`) qui appelle `fn_liberer_reservations_expirees`.
 - **Tests** : composant Redis contre un vrai serveur (TTL, expiration réelle, transaction), accès SQL sur la base de test, API de bout en bout ; PostgreSQL et Redis tournent dans la CI.
+
+**Réalisé (F-03)** :
+- **Jetons de rafraîchissement** (`RedisStockRefresh`) : le jeton opaque n'est **jamais** une clé Redis, seule son empreinte SHA-256 l'est (`{jti}` ci-dessus) : un export de Redis ne livre aucune session utilisable. La rotation est un **script Lua** exécuté d'un bloc par Redis : le jeton actif est supprimé, un marqueur `refresh:used:{jti}` le remplace, son successeur hérite du compte et de la famille. Deux requêtes simultanées avec le même jeton ne peuvent donc pas réussir toutes les deux.
+- **Réutilisation d'un jeton consommé** : le marqueur `used` le trahit ; le script supprime alors tous les jetons actifs de la famille (`refresh:family:{id}`) et le service pose `jwt:deny:fam:{id}`, de sorte que les jetons d'accès déjà émis pour cette session sont refusés eux aussi (15 min au plus).
+- **Révocation des jetons d'accès** (`RedisRevocationJwt`) : `jwt:deny:{jti}` pour la durée restante du jeton (déconnexion), sans trace une fois le jeton expiré. Si Redis ne répond pas, le jeton est refusé (Fail Securely, ADR-0003).
+- **Limitation de débit** (`RedisLimiteurDebit`) : compteur à fenêtre fixe, `INCR` et `EXPIRE` dans un script Lua (jamais de compteur sans expiration), 10 connexions par fenêtre de 15 min et par adresse (`rl:login:{ip}`), 5 créations de compte par heure (`rl:register:{ip}`). Au-delà : 429 avec `Retry-After`. Une adresse qui n'est pas une IP valide ne devient jamais une clé.
+- **Tests** : trois classes d'intégration contre un vrai Redis (TTL de 7 j, expiration réelle, rotation, réutilisation, famille, entrées forgées refusées avant toute clé).
 
 ### 6.7 Concurrence et transactions ✅ conception · ⏳ implémentation
 
@@ -354,14 +364,18 @@ Analyse complète (biens, scénarios de menace, risque résiduel accepté) : [di
 
 Patrons de sécurité retenus (Authenticator, Authorization Enforcer, Input Validator, Encrypted Storage, Limited View, Fail Securely…) : [security-patterns.md](../securite/security-patterns.md).
 
-### 7.3 Authentification ✅ conception · ⏳ implémentation (F-03, F-04)
+### 7.3 Authentification ✅ conception · ✅ implémentation (F-03) · ⏳ A2F (F-04)
 
-- **Jeton d'accès** JWT de 15 min, gardé **en mémoire** dans la SPA (jamais dans `localStorage`, lisible en cas de XSS).
-- **Jeton de rafraîchissement** opaque de 7 jours, à usage unique avec rotation, dans un cookie `HttpOnly; Secure; SameSite=Strict`, stocké et révocable dans Redis ; la réutilisation d'un jeton déjà utilisé révoque toute la famille.
-- **CSRF** : les appels à l'API passent par l'en-tête `Authorization`, que le navigateur n'envoie pas tout seul ; seule la route de rafraîchissement, à cookie, reçoit une protection dédiée.
-- **Mots de passe** : 12 caractères minimum, hachage argon2id, pas d'expiration forcée (recommandations ANSSI et CNIL).
-- **A2F TOTP** obligatoire pour le back-office, facultative pour les clients.
-- Diagramme : [séquence de connexion JWT](../uml/exports/seq-connexion-jwt.svg) · décision : [ADR-0003](../adr/0003-jwt-et-jeton-de-rafraichissement.md).
+- **Jeton d'accès** JWT **RS256** de 15 min, gardé **en mémoire** dans la SPA (jamais dans `localStorage`, lisible en cas de XSS). Revendications : `sub` (UUID du compte), `jti`, `fam` (session), `typ` (portée), `iat`, `exp`, `roles` ; ni e-mail ni nom dans le jeton. La clé privée vit hors dépôt (`api/config/jwt/*.pem`, générée par `make jwt-keys`).
+- **Jeton de rafraîchissement** opaque (256 bits tirés de `random_bytes`) de 7 jours, à usage unique avec rotation, dans un cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh`, stocké (empreinte SHA-256) et révocable dans Redis ; la réutilisation d'un jeton déjà utilisé révoque toute la famille, jetons d'accès compris.
+- **CSRF** : les appels à l'API passent par l'en-tête `Authorization`, que le navigateur n'envoie pas tout seul ; seule la route de rafraîchissement, à cookie, reçoit une protection dédiée à trois barrières : `SameSite=Strict`, en-tête `Origin` obligatoire et conforme à `CORS_ALLOW_ORIGIN`, et **double soumission signée** (l'en-tête `X-CSRF-Token` doit égaler le cookie `sk_csrf`, et cette valeur doit être le HMAC-SHA256 du jeton de rafraîchissement présenté : un cookie injecté par un tiers ne passe pas). Une requête refusée **ne consomme pas** le jeton : un attaquant ne peut pas déconnecter la victime.
+- **Mots de passe** : 12 à 128 caractères, tous caractères acceptés, liste locale de mots de passe triviaux, refus de l'identité du titulaire, hachage **argon2id**, pas d'expiration forcée (recommandations ANSSI et CNIL). Constat d'implémentation : l'algorithme `auto` de Symfony 7.4 produit du **bcrypt** (`$2y$13$…`), contrairement à ce que supposait le CDC ; il est donc nommé explicitement dans `security.yaml`, et un test d'intégration vérifie le préfixe `$argon2id$`. Les comptes du jeu d'essai (bcrypt) migrent vers argon2id à leur première connexion.
+- **Limitation de débit** : 10 tentatives de connexion par 15 min et par adresse (`rl:login:{ip}`), 429 avec `Retry-After`.
+- **Anti-énumération** : e-mail inconnu, compte désactivé et mauvais mot de passe renvoient le même 401 ; un hachage factice est toujours vérifié pour égaliser le temps de réponse.
+- **Autorisation (RBAC)** : matrice du CDC §11.5 portée par l'énumération `Permission` et décidée par `RbacVoter` ; les rôles sont **relus en base à chaque requête** (un rôle retiré ou un compte désactivé perd l'accès immédiatement, sans attendre les 15 min). Refus par défaut (`access_control`) ; accès refusé = 403 générique.
+- **A2F TOTP** obligatoire pour le back-office, facultative pour les clients : **préparée** par F-03 (le compte à `a2f_active` reçoit seulement un jeton intermédiaire de type `a2f`, 5 min, **refusé** par le pare-feu sur toutes les routes) ; la saisie du code et l'enrôlement sont l'objet de F-04.
+- **Décisions de mise en œuvre** (une ligne chacune) : inscription avec e-mail déjà pris → 409, avec limitation par adresse (`rl:register:{ip}`) ; consentement exigé par le DTO mais non stocké (le schéma T-01 n'a pas de colonne dédiée) ; e-mail non vérifié à la création (l'envoi relève du ticket des e-mails) ; seul `a2f_active` déclenche la seconde étape dans F-03.
+- Diagramme : [séquence de connexion JWT](../uml/exports/seq-connexion-jwt.svg) · décision : [ADR-0003](../adr/0003-jwt-et-jeton-de-rafraichissement.md) (§ « Mise en œuvre »).
 
 ### 7.4 Protection des clés de licence ✅ conception · ⏳ implémentation (F-08)
 
@@ -478,15 +492,134 @@ END IF;
 
 Une clé vendue est ensuite protégée par `trg_cle_licence_protection` : toute modification ou suppression lève `SK003`, sauf l'enregistrement de la première révélation par l'acheteur.
 
-### 8.6 Extraits à ajouter ⏳
+### 8.6 Authentification : composants métier, d'accès aux données et contrôleur (F-03)
+
+**a) Rejouer un jeton de rafraîchissement ne doit jamais réussir : rotation atomique en Lua**
+
+`api/src/Infrastructure/Redis/RedisStockRefresh.php` (composant d'accès aux données Redis, extrait) — Redis exécute le script d'un bloc : deux requêtes simultanées avec le même jeton ne peuvent pas toutes deux le consommer. Un jeton déjà consommé (marqueur `used`) révoque toute la famille.
+
+```lua
+local actif = redis.call('GET', KEYS[1])            -- refresh:{empreinte}
+if actif then
+    local separateur = string.find(actif, ':', 1, true)
+    local utilisateur = string.sub(actif, 1, separateur - 1)
+    local famille = string.sub(actif, separateur + 1)
+    redis.call('SET', KEYS[3], actif, 'EX', ARGV[1])  -- le successeur hérite du compte et de la famille
+    redis.call('DEL', KEYS[1])                        -- l'ancien jeton n'est plus actif
+    redis.call('SET', KEYS[2], famille, 'EX', ARGV[1])-- marqueur « consommé »
+    ...
+    return {1, utilisateur, famille}
+end
+local famille = redis.call('GET', KEYS[2])           -- refresh:used:{empreinte}
+if famille then                                      -- jeton déjà consommé : vol probable
+    for _, membre in ipairs(redis.call('SMEMBERS', ARGV[2] .. 'family:' .. famille)) do
+        redis.call('DEL', ARGV[2] .. membre)         -- toute la famille est révoquée
+    end
+    return {-1, '', famille}
+end
+return {0, '', ''}
+```
+
+**b) Le service qui orchestre le cycle de vie des jetons (couche métier)**
+
+`api/src/Service/Auth/SessionService.php` (extrait) — aucune connaissance de HTTP : il reçoit une chaîne et lève une exception métier traduite en 401 par `ApiExceptionSubscriber`.
+
+```php
+public function rafraichir(string $jetonRefresh): Session
+{
+    if (1 !== preg_match(self::FORMAT_JETON, $jetonRefresh)) {
+        throw new SessionInvalideException();   // jamais de requête Redis pour une valeur forgée
+    }
+    $nouveauJeton = self::nouveauJeton();
+    $rotation = $this->refresh->faireTourner(self::empreinte($jetonRefresh), self::empreinte($nouveauJeton));
+
+    if (Rotation::Reutilisation === $rotation->issue) {
+        $this->revocation->revoquerFamille((string) $rotation->familleId, self::DUREE_ACCES);  // jetons d'accès compris
+        $this->logger->warning('Réutilisation d\'un jeton de rafraîchissement : session révoquée', ['familleId' => $rotation->familleId]);
+        throw new SessionInvalideException();
+    }
+    ...
+}
+```
+
+**c) Le contrôleur : validation, CSRF, cookies, aucune règle métier**
+
+`api/src/Controller/Api/AuthController.php` (extrait) — `#[MapRequestPayload(acceptFormat: 'json')]` valide le DTO et refuse tout autre type de contenu (un formulaire inter-site reçoit 415) ; la route de rafraîchissement vérifie l'origine et la double soumission **avant** de toucher au jeton.
+
+```php
+#[Route('/api/token/refresh', name: 'api_token_refresh', methods: ['POST'])]
+public function refresh(Request $requete): JsonResponse
+{
+    $this->csrf->verifier($requete);                 // Origin + X-CSRF-Token signé : 403 sans consommer le jeton
+    $jeton = $this->cookies->lireRefresh($requete) ?? throw new SessionInvalideException();
+
+    $session = $this->sessions->rafraichir($jeton);
+    $reponse = self::json(SessionResponse::depuis($session));
+    $this->cookies->poser($reponse, $session->jetonRefresh);   // HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh
+    return $reponse;
+}
+```
+
+**d) Utilisateur, fournisseur et autorisation (couche sécurité)**
+
+`api/src/Security/UtilisateurProvider.php` (extrait) — pas d'entité Doctrine : le compte est lu en base par `UtilisateurRepository` (SQL paramétré, projection sans secret) et **relu à chaque requête** ; un compte désactivé ou supprimé est refusé aussitôt.
+
+```php
+private function charger(string $id, ?string $jti = null, ?string $familleId = null, ?int $expiration = null): Utilisateur
+{
+    $compte = $this->comptes->parId($id);
+    if (null === $compte || !$compte->actif) {
+        throw new UserNotFoundException();   // rien ne distingue « inconnu » de « désactivé »
+    }
+    return new Utilisateur($compte, $jti, $familleId, $expiration);
+}
+```
+
+`api/src/Security/Voter/RbacVoter.php` (extrait) — la matrice du CDC §11.5 vit dans l'énumération `Permission` ; les rôles du jeton ne servent jamais à décider, ceux de la base oui.
+
+```php
+protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
+{
+    $utilisateur = $token->getUser();
+    $permission = Permission::tryFrom($attribute);
+    if (!$utilisateur instanceof Utilisateur || null === $permission) {
+        return false;   // refus par défaut
+    }
+    return [] !== array_intersect($utilisateur->compte->roles, $permission->rolesAutorises());
+}
+```
+
+**e) Configuration : refus par défaut, argon2id, JWT RS256**
+
+`api/config/packages/security.yaml` et `lexik_jwt_authentication.yaml` (extraits) :
+
+```yaml
+security:
+    password_hashers:
+        App\Security\Utilisateur: { algorithm: argon2id }   # « auto » donne du bcrypt avec Symfony 7.4
+    firewalls:
+        api: { pattern: ^/api, stateless: true, provider: utilisateurs, jwt: ~ }
+    access_control:                                         # la dernière règle ferme tout le reste
+        - { path: '^/api/(health|inscription|connexion|token/refresh)$', roles: PUBLIC_ACCESS }
+        - { path: '^/api/panier(/|$)', roles: PUBLIC_ACCESS }
+        - { path: '^/api', roles: IS_AUTHENTICATED_FULLY }
+lexik_jwt_authentication:
+    token_ttl: 900          # 15 minutes
+    user_id_claim: sub
+    token_extractors:       # en-tête seulement : jamais cookie ni URL
+        cookie: { enabled: false }
+        query_parameter: { enabled: false }
+```
+
+### 8.7 Extraits restant à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
 |---|---|---|
 | Service de chiffrement AES-GCM + empreinte HMAC | F-08 | C8 |
-| Voter de propriété d'une commande (anti-IDOR) | F-03, F-06 | C6 |
-| Panier et réservation dans Redis (TTL) | F-05 | C8 |
+| Voter de propriété d'une commande (anti-IDOR) | F-06 | C6 |
+| Panier et réservation dans Redis (TTL) | F-05 (livré, extrait à rédiger) | C8 |
 | Verrouillage optimiste et réponse 409 | F-09 | C8 |
-| Migration Doctrine créant les rôles SGBD | T-01 | C7 |
+| Migration Doctrine créant les rôles SGBD | T-01 (livré, extrait à rédiger) | C7 |
 
 ---
 
@@ -506,9 +639,13 @@ Une clé vendue est ensuite protégée par `trg_cle_licence_protection` : toute 
 
 | Partie | Tests | Résultat |
 |---|---|---|
-| API | 3 unitaires + 2 d'intégration sur `/api/health` (réponse, absence de cache, aucune fuite, `POST` refusé en 405) | 5 / 5 ✅ |
-| Front | 4 tests du client HTTP + 2 tests de rendu | 6 / 6 ✅ |
-| CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml` | Verte sur les PR #37, #38, #39 |
+| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret | 169 / 169 ✅ |
+| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion | 104 / 104 ✅ |
+| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse | 142 / 142 ✅ |
+| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions | 80 / 80 ✅ |
+| CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml`, tests SQL ; clés JWT jetables générées par la CI | Verte sur chaque PR |
+
+**Sécurité des tests** : les jetons falsifiés sont fabriqués par un utilitaire indépendant de Lexik (`tests/Support/Auth/JwtForge.php`) qui joue l'attaquant ; chaque attaque a son **témoin** (le même jeton, régulier, est accepté) pour que les refus prouvent quelque chose. Les routes du back-office n'existant pas encore, une **sonde RBAC** (chargée en environnement de test uniquement) expose une route par permission et suit le chemin d'une vraie route.
 
 ### 9.3 Jeu d'essai de la fonctionnalité la plus représentative ⏳
 
@@ -524,15 +661,19 @@ Fonctionnalité retenue : **achat concurrent de la dernière clé** (O2, ENF-03)
 
 ---
 
-## 10. Veille sur les vulnérabilités ⏳
+## 10. Veille sur les vulnérabilités 🟡
 
-> À rédiger **individuellement**. Sources prévues au CDC §16.6 : CERT-FR, bulletins de sécurité Symfony, PostgreSQL et Redis, OWASP, CNIL. Note de veille à tenir dans `docs/veille.md` (source, résumé, impact sur SideKey).
+> À rédiger **individuellement** : chaque candidat reprend ces entrées, vérifie les sources et ajoute les siennes. Sources prévues au CDC §16.6 : CERT-FR, bulletins de sécurité Symfony, PostgreSQL et Redis, OWASP, CNIL. Note de veille à tenir dans `docs/veille.md` (source, résumé, impact sur SideKey).
 
-Gabarit :
+Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/2026 :
 
 | Date | Source | Vulnérabilité / sujet | Impact sur SideKey | Action |
 |---|---|---|---|---|
-| | | | | |
+| 19/11/2026 | GitHub Security Advisories, `lcobucci/jwt` : [GHSA-g3gx-p6xp-9gxq](https://github.com/lcobucci/jwt/security/advisories/GHSA-g3gx-p6xp-9gxq) (sévérité moyenne) | `verify()` en ECDSA lève une exception sur une signature de bonne taille dont R ou S commence par 17 octets nuls ou plus ; versions ≤ 5.6.1 | Bibliothèque qui signe et vérifie les JWT de LexikJWT. Version installée : **5.7.0**, hors de la plage touchée ; SideKey signe en **RS256**, pas en ECDSA | Aucune ; `composer audit` bloquant en CI surveille les avis suivants |
+| 14/05/2021 | GitHub Security Advisories, LexikJWTAuthenticationBundle : [CVE-2021-21424](https://github.com/advisories/GHSA-2frx-j9hj-6c65) / GHSA-2frx-j9hj-6c65 (faible) | Énumération d'utilisateurs par les mécanismes d'authentification ; versions < 2.10.7 et 2.11.0 à 2.11.2 | Bundle installé en **3.2.0**, non concerné. Le sujet vaut pour **notre propre connexion** : révéler qu'un e-mail existe aide l'attaquant (OWASP A07) | Même 401 pour compte inconnu, désactivé ou mauvais mot de passe ; hachage factice pour égaliser le temps de réponse ; tests dédiés (`EntreesAuthentificationTest`) |
+| 02/2020 | IETF, [RFC 8725](https://www.rfc-editor.org/rfc/rfc8725) : JSON Web Token Best Current Practices | Refuser `alg: none`, ne pas laisser le jeton choisir l'algorithme, éviter la confusion RS256 / HS256 (clé publique utilisée comme secret HMAC), valider les revendications | Ce sont les deux attaques classiques sur les JWT ; le jeton d'accès de SideKey est un JWT | Décodeur RS256 seul ; tests `JwtAttaquesTest` : `alg: none` (5 variantes), HS256 signé avec la clé publique, mauvaise clé, charge altérée |
+| 25/11/2026 | `composer audit` sur les dépendances de production (`composer.lock`) | Aucun avis connu sur `symfony/security-*` 7.4.24, `lexik/jwt-authentication-bundle` 3.2.0, `lcobucci/jwt` 5.7.0 | Aucun | Audit exécuté à chaque PR (job `api`) |
+| 25/11/2026 | Observation sur le projet (hash relevé en base) | L'algorithme `auto` du composant PasswordHasher de Symfony 7.4.24 produit du **bcrypt** (`$2y$13$…`), pas de l'argon2id que le CDC §11.4 en attendait | Écart entre la conception et le comportement réel du framework : le CDC se fiait au nom « auto » | `algorithm: argon2id` nommé explicitement ; test d'intégration sur le préfixe `$argon2id$` ; CDC corrigé |
 
 ---
 
@@ -570,6 +711,7 @@ Gabarit :
 | Base de données | Schéma PostgreSQL (21 tables), contraintes et index, comptes SGBD à moindre privilège, jeu d'essai, sauvegarde et restauration testées (T-01) ; fonctions et triggers défensifs, test de concurrence (T-02) | `api/sql/`, `api/tests/Database/` |
 | Internationalisation | Front FR / EN (sélecteur mémorisé, `lang`, clés typées, parité testée) ; erreurs de l'API traduites selon `Accept-Language` (F-02) | `front/src/i18n/`, `api/translations/` |
 | Panier et réservation | API du panier sur Redis, règles de quantité et de stock, minuteur de réservation, libération planifiée des réservations expirées (F-05) | `api/src/Service/Panier/`, `api/src/Infrastructure/Redis/` |
+| Authentification et RBAC | Inscription, connexion, JWT RS256 de 15 min en mémoire, refresh opaque de 7 j à rotation et détection de réutilisation (Redis), CSRF du refresh, argon2id, limitation de débit, matrice RBAC en voter, jeton intermédiaire A2F préparé ; écran E05 FR / EN (F-03) | `api/src/Service/Auth/`, `api/src/Security/`, `api/src/Infrastructure/Redis/`, `front/src/features/auth/`, `api/tests/Security/` |
 
 ### 13.2 Pas encore fait
 
@@ -579,13 +721,15 @@ Gabarit :
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | Catalogue, authentification, A2F, commande et concurrence, paiement, clés, back-office | F-01, F-03, F-04, F-06 à F-10 |
-| Dossier | Comptes rendus quotidiens, veille (§10), recherche anglophone (§11), extraits métier (§8.6), jeu d'essai (§9.3), captures, bilan | L-03 (#34) |
+| Features | Catalogue, A2F (saisie du code TOTP, enrôlement, codes de secours), commande et concurrence, paiement, clés, back-office | F-01, F-04, F-06 à F-10 |
+| Dossier | Comptes rendus quotidiens, veille personnelle (§10, premières entrées faites), recherche anglophone (§11), extraits métier restants (§8.7), jeu d'essai (§9.3), captures (dont E05), bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 
 ### 13.3 Points de vigilance
 
-- **Planning** : les features métier (F-01 à F-10) n'ont pas commencé, alors que le socle et la conception sont faits ; c'est la priorité absolue pour la suite.
+- **Planning** : le panier (F-05) et l'authentification (F-03) sont livrés ; le catalogue (F-01), l'A2F (F-04) et le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
+- **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-03.
+- **Proxy et adresse du client** : la limitation de débit s'appuie sur `Request::getClientIp()` ; derrière un reverse proxy (Caddy en recette), `trusted_proxies` devra être configuré par T-04, faute de quoi toutes les requêtes partageraient l'adresse du proxy.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
 - **Dossier individuel** : les §4.3, §10, §11 et §12 doivent être personnalisés par chaque candidat.
 - **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle est devenue vraie avec la fusion de la PR #41.

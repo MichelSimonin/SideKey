@@ -618,12 +618,17 @@ Ces objets sont livrés dans les **migrations Doctrine** (SQL brut versionné).
 | Panier | `cart:{userId}` / `cart:anon:{uuid}` | Hash | 7 j / 24 h | BX-04 |
 | Réservation | `resa:{commandeId}` | String | 15 min | BX-03 |
 | Jetons de rafraîchissement | `refresh:{jti}` → userId | String | 7 j | BX-07 |
+| Jetons de rafraîchissement consommés *(F-03)* | `refresh:used:{jti}` → familleId | String | 7 j | BX-07 |
+| Famille de jetons *(F-03)* | `refresh:family:{familleId}` | Set | 7 j | BX-07 |
 | Révocation des JWT | `jwt:deny:{jti}` | String | durée de vie restante du jeton | BX-07 |
-| Limitation de débit | `rl:login:{ip}`, `rl:pay:{userId}` | Compteur | 15 min / 1 h | BX-15 |
+| Révocation d'une session *(F-03)* | `jwt:deny:fam:{familleId}` | String | 15 min (durée d'un jeton d'accès) | BX-07 |
+| Limitation de débit | `rl:login:{ip}`, `rl:register:{ip}` *(F-03)*, `rl:pay:{userId}` | Compteur | 15 min / 1 h / 1 h | BX-15 |
 | Compteurs anti-fraude | `fraud:keys24h:{userId}` | Compteur | 24 h | BX-15 |
 | Cache catalogue | `cache:jeu:{slug}:{langue}` | String JSON | 5 min | BX-01 |
 | Idempotence du paiement | `idem:{cle}` | String | 24 h | BX-03 |
 | File Messenger (si transport Redis) | `messages` | Stream | — | BX-11 |
+
+*Précisions de mise en œuvre (F-03)* : `{jti}` d'un jeton de rafraîchissement est l'**empreinte SHA-256** du jeton opaque (le jeton lui-même n'est jamais stocké) ; la valeur de `refresh:{jti}` est `userId:familleId`. Les marqueurs `refresh:used:*` permettent de détecter la réutilisation d'un jeton déjà consommé et de révoquer toute la famille.
 
 Sécurité : mot de passe et **ACL** par préfixe, réseau interne uniquement, commandes dangereuses désactivées. **Aucune donnée de référence dans Redis** : la perte de Redis coûte des paniers et des sessions, jamais des commandes ni des clés.
 
@@ -705,7 +710,7 @@ DTO validés par **Symfony Validator** (types, bornes, formats, listes de valeur
 - 12 caractères au minimum, 128 au maximum, tous les caractères acceptés (phrases de passe encouragées).
 - Refus des mots de passe compromis (liste locale ou API Have I Been Pwned avec k-anonymat **[À valider]**).
 - Indicateur de robustesse à la saisie ; pas d'expiration forcée.
-- Hachage **argon2id** (`auto` de Symfony PasswordHasher).
+- Hachage **argon2id**. *Précision (F-03)* : l'algorithme `auto` de Symfony 7.4 produit du bcrypt ; `argon2id` est donc nommé explicitement dans `security.yaml`.
 
 **A2F (B9)**
 - **TOTP**, avec 10 codes de secours à usage unique, hachés.
