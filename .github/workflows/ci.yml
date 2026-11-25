@@ -87,6 +87,9 @@ jobs:
           php bin/console lint:yaml config --parse-tags
           php bin/console lint:container
 
+      - name: Clés JWT de test (jetables, générées à chaque exécution, jamais versionnées)
+        run: php bin/console lexik:jwt:generate-keypair --no-interaction
+
       - name: Base de test (schéma, fonctions, triggers et jeu d'essai)
         run: PGDATABASE=sidekey_test sh sql/bin/db-seed.sh --reset
 

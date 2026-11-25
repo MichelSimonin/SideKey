@@ -36,6 +36,16 @@ abstract class ExceptionMetier extends \RuntimeException
     }
 
     /**
+     * En-têtes de réponse propres à l'erreur (Retry-After d'un 429…), jamais d'information technique.
+     *
+     * @return array<string, string>
+     */
+    public function entetes(): array
+    {
+        return [];
+    }
+
+    /**
      * Données complémentaires renvoyées au client (jamais d'information technique).
      *
      * @return array<string, scalar>

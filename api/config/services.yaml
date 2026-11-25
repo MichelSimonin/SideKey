@@ -28,3 +28,11 @@ services:
         factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
         arguments: ['%env(REDIS_URL)%', { lazy: true }]
 
+
+when@test:
+    services:
+        # Sonde RBAC des tests de sécurité F-03 : jamais chargée hors environnement de test.
+        App\Tests\Support\Controller\:
+            resource: '../tests/Support/Controller/'
+            autowire: true
+            tags: ['controller.service_arguments']

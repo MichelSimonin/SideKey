@@ -55,7 +55,7 @@ SideKey/
 Seul Docker est nécessaire : PHP, Composer et Node tournent dans les conteneurs.
 
 ```bash
-make init      # première fois : copie les .env.example, construit, démarre, composer install
+make init      # première fois : copie les .env.example, construit, démarre, composer install, génère les clés JWT
 make up        # les fois suivantes
 make help      # toutes les commandes
 ```

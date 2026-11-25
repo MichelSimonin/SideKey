@@ -18,3 +18,8 @@ error:
     panier_plein: 'Votre panier contient déjà %maximum% offres différentes.'
     offre_indisponible: "Cette offre n'existe pas ou n'est plus en vente."
     commande_non_reservable: "Cette commande n'accepte plus de réservation : elle a expiré ou est close."
+    # Authentification (F-03) : messages volontairement génériques (pas d'énumération de comptes)
+    identifiants_invalides: 'E-mail ou mot de passe incorrect.'
+    session_invalide: 'Session expirée ou invalide. Veuillez vous reconnecter.'
+    email_deja_utilise: 'Un compte existe déjà avec cet e-mail.'
+    mot_de_passe_invalide: 'Le mot de passe ne respecte pas la politique de sécurité (12 à 128 caractères).'

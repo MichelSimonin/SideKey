@@ -9,3 +9,9 @@
 
 controllers:
     resource: routing.controllers
+
+# Environnement de test uniquement : sonde RBAC (tests/Support/Controller), voir SondeRbacController.
+when@test:
+    sonde_rbac:
+        resource: ../tests/Support/Controller/
+        type: attribute

@@ -58,6 +58,7 @@ api/src/
 ├── Infrastructure/Redis/    panier, réservations, révocation, compteurs, cache
 ├── Infrastructure/Crypto/   AES-256-GCM (clés) et HMAC-SHA256 (empreintes)
 ├── Infrastructure/Payment/  PSP simulé derrière PaymentProviderInterface
+├── Security/                utilisateur, fournisseur, permissions (matrice RBAC), jetons JWT, cookies et CSRF
 ├── Security/Voter/          autorisations (rôle + propriété)
 ├── EventSubscriber/         en-têtes de sécurité, exceptions JSON
 └── Exception/               exceptions métier traduites en codes HTTP
@@ -106,10 +107,13 @@ Le détail concurrent est dans [`seq-achat-concurrent`](../uml/src/seq-achat-con
 | Limitation de débit | 429 | `Retry-After` | oui |
 | Erreur interne | 500 | `{ "message": "erreur interne", "correlationId": … }` | oui, avec trace **uniquement** côté serveur |
 
-`EventSubscriber/ExceptionListener` traduit les exceptions métier
-(`StockInsuffisantException`, `PaiementRefuseException`, `OptimisticLockException`,
-`AccesRefuseException`) en codes HTTP : aucun contrôleur ne construit un code d'erreur à
-la main, aucune trace technique ne quitte le serveur.
+`EventSubscriber/ApiExceptionSubscriber` traduit les exceptions métier
+(`ExceptionMetier` : `StockInsuffisantException`, `IdentifiantsInvalidesException`,
+`SessionInvalideException`, `TropDeTentativesException`…) en codes HTTP, messages traduits selon
+`Accept-Language` et, quand l'erreur en porte, en-têtes (`Retry-After` d'un 429) : aucun
+contrôleur ne construit un code d'erreur à la main, aucune trace technique ne quitte le serveur.
+Les échecs d'authentification JWT (absent, falsifié, expiré, révoqué) passent par
+`Security/Jwt/JwtSubscriber` et produisent le même 401 générique.
 
 ---
 

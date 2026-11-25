@@ -1,0 +1,42 @@
+# Authentification et autorisation (F-03, CDC §11.4 et §11.5, ADR-0003).
+# Une seule porte d'entrée : le pare-feu « api », sans état, authentifié par JWT RS256 (LexikJWTAuthenticationBundle).
+security:
+    # Mots de passe : argon2id (CDC §11.4, ANSSI). L'algorithme est nommé explicitement : constaté à
+    # l'implémentation, « auto » choisit bcrypt avec Symfony 7.4, ce qui ne répond pas au CDC.
+    # Un hachage plus ancien (bcrypt du jeu d'essai) est vérifié puis remplacé par de l'argon2id à la connexion.
+    password_hashers:
+        App\Security\Utilisateur:
+            algorithm: argon2id
+
+    providers:
+        # Utilisateurs lus en base par un composant DBAL (pas d'entité Doctrine), rechargés à chaque requête.
+        utilisateurs:
+            id: App\Security\UtilisateurProvider
+
+    firewalls:
+        dev:
+            pattern: ^/(_profiler(/|$)|(_wdt|assets|build)/)
+            security: false
+        api:
+            pattern: ^/api
+            stateless: true
+            provider: utilisateurs
+            jwt: ~
+
+    # Refus par défaut : la dernière règle ferme tout ce qui n'est pas listé explicitement (Fail Securely).
+    # Seule la première règle qui correspond s'applique ; l'ordre compte.
+    # Les droits par rôle (matrice §11.5) sont décidés par RbacVoter, route par route et dans les services.
+    access_control:
+        - { path: '^/api/(health|inscription|connexion|token/refresh)$', roles: PUBLIC_ACCESS }
+        - { path: '^/api/panier(/|$)', roles: PUBLIC_ACCESS }      # panier visiteur (F-05)
+        - { path: '^/api/(jeux|catalogue)(/|$)', roles: PUBLIC_ACCESS }   # catalogue public (F-01)
+        - { path: '^/api', roles: IS_AUTHENTICATED_FULLY }
+
+when@test:
+    security:
+        password_hashers:
+            # Coût minimal en test pour garder une suite rapide ; la production utilise les coûts par défaut.
+            App\Security\Utilisateur:
+                algorithm: argon2id
+                time_cost: 3     # plancher d'argon2
+                memory_cost: 10  # plancher d'argon2 (Kio)

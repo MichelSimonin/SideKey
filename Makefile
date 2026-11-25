@@ -3,7 +3,7 @@ DC = docker compose
 PHP = $(DC) exec php
 
 .DEFAULT_GOAL := help
-.PHONY: help init up down restart build logs ps sh composer console front-sh psql redis-cli db-migrate db-reset db-test db-seed db-backup db-restore test test-api test-front uml clean
+.PHONY: help init up down restart build logs ps sh composer console jwt-keys front-sh psql redis-cli db-migrate db-reset db-test db-seed db-backup db-restore test test-api test-front uml clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -15,6 +15,7 @@ init: ## Première installation : copie les .env.example, construit et démarre
 	$(DC) build
 	$(DC) up -d
 	$(PHP) composer install
+	$(MAKE) jwt-keys
 	@echo "API : http://localhost:8000   Front : http://localhost:5173"
 
 up: ## Démarre la stack
@@ -42,6 +43,9 @@ composer: ## Composer dans le conteneur (make composer c="require symfony/orm-pa
 
 console: ## Console Symfony (make console c="debug:router")
 	$(PHP) php bin/console $(c)
+
+jwt-keys: ## Génère la paire de clés JWT (RS256) si elle n'existe pas ; jamais versionnée
+	$(PHP) php bin/console lexik:jwt:generate-keypair --skip-if-exists --no-interaction
 
 front-sh: ## Shell dans le conteneur Node
 	$(DC) exec front sh

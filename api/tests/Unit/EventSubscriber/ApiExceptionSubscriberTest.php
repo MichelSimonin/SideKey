@@ -75,6 +75,18 @@ final class ApiExceptionSubscriberTest extends TestCase
         self::assertSame('60', $response->headers->get('Retry-After'));
     }
 
+    public function testBusinessExceptionForwardsItsHeaders(): void
+    {
+        // F-03 : la limitation de débit (ExceptionMetier) indique quand réessayer, comme une HttpException 429.
+        $event = $this->dispatch('/api/connexion', new \App\Exception\TropDeTentativesException(742));
+
+        $response = $event->getResponse();
+        self::assertNotNull($response);
+        self::assertSame(429, $response->getStatusCode());
+        self::assertSame('742', $response->headers->get('Retry-After'));
+        self::assertSame('{"message":"Trop de tentatives."}', $response->getContent());
+    }
+
     public function testRequestsOutsideApiAreIgnored(): void
     {
         $event = $this->dispatch('/', new NotFoundHttpException());
