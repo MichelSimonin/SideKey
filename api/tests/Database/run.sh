@@ -6,7 +6,8 @@
 #   2. applique le schéma (sql/bin/db-apply.sh) : c'est le test « migrations sans erreur sur base vide »
 #   3. lance les tests NN_*_test.sql avec NN de 01 à 39 (base vide), puis charge le jeu d'essai
 #      (sql/seed/*.sql), puis lance les tests NN de 40 à 99 (base chargée)
-#   4. rejoue les fichiers *.down.sql en sens inverse : le schéma doit disparaître entièrement
+#   4. rejoue les fichiers *.down.sql en sens inverse (triggers, fonctions, puis schéma) :
+#      tables et fonctions fn_* / trg_* doivent disparaître entièrement
 #
 # Connexion : variables PG* standard, compte super-utilisateur (création de base et de rôles).
 set -eu
@@ -67,14 +68,24 @@ if [ -f "$HERE/50_sauvegarde.sh" ]; then
     sh "$HERE/50_sauvegarde.sh"
 fi
 
+if [ -f "$HERE/60_concurrence.sh" ]; then
+    sh "$HERE/60_concurrence.sh"
+fi
+
 echo "== Annulation des migrations (fichiers .down.sql)"
-for f in $(ls "$SQL_DIR"/schema/*.down.sql | sort -r); do
+for f in $(ls "$SQL_DIR"/triggers/*.down.sql "$SQL_DIR"/functions/*.down.sql 2>/dev/null | sort -r) \
+         $(ls "$SQL_DIR"/schema/*.down.sql | sort -r); do
     echo "-> $(basename "$f")"
     psql -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$f"
 done
 remaining=$(psql -X -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
 if [ "$remaining" != "0" ]; then
     echo "ECHEC : $remaining table(s) restent après l'annulation des migrations" >&2
+    exit 1
+fi
+routines=$(psql -X -Atc "SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname ~ '^(fn|trg)_'")
+if [ "$routines" != "0" ]; then
+    echo "ECHEC : $routines fonction(s) fn_* / trg_* restent après l'annulation des migrations" >&2
     exit 1
 fi
 echo "ok - schéma entièrement annulé"

@@ -195,15 +195,29 @@ code), préfixes `pk_`, `fk_`, `uq_`, `ck_`, `ix_`, `trg_`, `fn_`, colonnes `cre
 
 ### 4.4 Objets PL/pgSQL (livrés en T-02)
 
-| Objet | Rôle | Interaction avec le modèle |
-|---|---|---|
-| `fn_reserver_cles(offre, quantite, ligne)` | `FOR UPDATE SKIP LOCKED`, exception si stock insuffisant | passe `cle_licence` de `DISPONIBLE` à `RESERVEE` |
-| `fn_valider_commande(commande)` | validation atomique du paiement | passe les clés à `VENDUE` et la commande à `PAYEE` |
-| `fn_liberer_reservations_expirees()` | balayage minute (Symfony Scheduler) | clés `RESERVEE` → `DISPONIBLE`, commande `EXPIREE` |
-| `trg_commande_historique` | historise chaque transition | alimente `commande_historique` |
-| `trg_commande_transition` | refuse une transition non prévue | applique §6.4 en base |
-| `trg_cle_licence_protection` | interdit `UPDATE`/`DELETE` d'une clé `VENDUE` | RG-04 |
-| `trg_journal_audit_immuable` | interdit `UPDATE` et `DELETE` | BX-16, ENF-12 |
+Sources : [`api/sql/functions/001_fonctions.sql`](../../api/sql/functions/001_fonctions.sql) et
+[`api/sql/triggers/001_triggers.sql`](../../api/sql/triggers/001_triggers.sql), joués par
+`db-apply.sh` et par les migrations Doctrine `Version20261125090000` / `Version20261125090100`.
+
+| Objet | Rôle | Interaction avec le modèle | Erreur levée |
+|---|---|---|---|
+| `fn_reserver_cles(offre, quantite, ligne)` | vérifie les paramètres, la ligne, la commande et l'offre ; `FOR UPDATE SKIP LOCKED`, clés les plus anciennes d'abord ; tout ou rien | `cle_licence` `DISPONIBLE` → `RESERVEE`, rattachée à la ligne | `22004`, `22023`, `P0002`, **`SK001`** stock insuffisant, `SK005` commande expirée ou close |
+| `fn_valider_commande(commande)` | validation atomique et **idempotente** du paiement ; accepte `EN_ATTENTE_PAIEMENT` non expirée ou `A_VERIFIER` ; exige une clé réservée par unité | clés `VENDUE`, commande `PAYEE` et `payee_le` | `22004`, `P0002`, **`SK005`** |
+| `fn_liberer_reservations_expirees()` | balayage minute (Symfony Scheduler), `SKIP LOCKED` | commandes expirées → `EXPIREE`, leurs clés → `DISPONIBLE` | — (renvoie le nombre de commandes expirées) |
+| `trg_commande_transition` | refuse une transition hors §6.4 (à l'insertion, le statut est contrôlé par `ck_commande_statut`) | applique §6.4 en base | **`SK002`** |
+| `trg_commande_historique` | historise la création et chaque changement de statut ; auteur lu dans `sidekey.auteur_id` (`SET LOCAL` posé par l'API), `NULL` pour le système | alimente `commande_historique` (RG-21) | — |
+| `trg_cle_licence_protection` | interdit `UPDATE` / `DELETE` d'une clé `VENDUE`, sauf la première révélation (`revelee_le` de `NULL` à une date) | RG-04 | **`SK003`** |
+| `trg_journal_audit_immuable`, `trg_commande_historique_immuable` | interdisent `UPDATE`, `DELETE` et `TRUNCATE`, même au propriétaire | BX-16, ENF-12 | **`SK004`** |
+
+Style défensif commun : `SECURITY INVOKER` (aucune élévation de droits), `search_path` figé,
+paramètres contrôlés avant tout accès, verrous explicites, `EXECUTE` sur les `fn_*` pour
+`sk_app` uniquement (retiré à `PUBLIC`), fonctions de trigger exécutables par personne.
+Les codes `SKxxx` sont traduits en codes HTTP par l'API (409 pour `SK001` à `SK005`).
+Le jeu d'essai, qui écrit lui-même un historique daté, suspend `trg_commande_historique`
+le temps de son chargement.
+
+Tests : `api/tests/Database/10_fonctions_test.sql`, `11_triggers_test.sql` (cas d'erreur et
+cas nominaux) et `60_concurrence.sh` (deux sessions réelles se disputent la dernière clé).
 
 ### 4.5 Rôles PostgreSQL (CDC §9.5)
 

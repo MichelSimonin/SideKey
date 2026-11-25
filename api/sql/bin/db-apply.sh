@@ -2,7 +2,9 @@
 # Applique le schéma SideKey sur une base VIDE, dans l'ordre :
 #   1. roles/01_roles.sql        comptes PostgreSQL (si présent)
 #   2. schema/NNN_*.sql          tables, contraintes, vues (hors *.down.sql), exécutés avec le rôle sk_owner
-#   3. roles/02_privileges.sql   GRANT / REVOKE (si présent)
+#   3. functions/NNN_*.sql       fonctions métier fn_* (T-02), avec le rôle sk_owner
+#   4. triggers/NNN_*.sql        triggers défensifs trg_* (T-02), avec le rôle sk_owner
+#   5. roles/02_privileges.sql   GRANT / REVOKE (si présent)
 #
 # Connexion : variables PG* standard (PGHOST, PGUSER, PGPASSWORD, PGDATABASE). Le compte doit pouvoir
 # créer des rôles (super-utilisateur de la base de dev / de CI).
@@ -38,6 +40,15 @@ for f in "$SQL_DIR"/schema/[0-9]*.sql; do
     case "$f" in *.down.sql) continue ;; esac
     echo "-> $(basename "$f")"
     ( export PGOPTIONS="$SCHEMA_OPTIONS"; psql_run --single-transaction -f "$f" )
+done
+
+for dir in functions triggers; do
+    for f in "$SQL_DIR"/$dir/[0-9]*.sql; do
+        [ -e "$f" ] || continue
+        case "$f" in *.down.sql) continue ;; esac
+        echo "-> $dir/$(basename "$f")"
+        ( export PGOPTIONS="$SCHEMA_OPTIONS"; psql_run --single-transaction -f "$f" )
+    done
 done
 
 if [ -f "$SQL_DIR/roles/02_privileges.sql" ]; then
