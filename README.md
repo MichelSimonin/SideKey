@@ -83,6 +83,8 @@ Exemples : `make console c="debug:router"`, `make composer c="require symfony/or
 
 Aucun fichier `.env` n'est versionné : seuls les `.env.example` le sont, sans aucun secret.
 
+- Clés de licence (F-08) : `LICENSE_KEY_ENC_KEY` et `LICENSE_KEY_HMAC_KEY` dans `api/.env`, deux secrets distincts générés avec `openssl rand -base64 32`. Sans eux, l'import et la révélation des clés refusent de fonctionner (le reste de l'API marche). Les tests utilisent les valeurs factices de `api/.env.test`.
+
 ## Tests et CI
 
 ```bash
