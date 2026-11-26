@@ -19,6 +19,11 @@ interface JournalAudit
     public const CATALOGUE_CREATION = 'CATALOGUE_CREATION';
     public const CATALOGUE_MODIFICATION = 'CATALOGUE_MODIFICATION';
     public const CATALOGUE_SUPPRESSION = 'CATALOGUE_SUPPRESSION';
+    public const PAIEMENT_ACCEPTE = 'PAIEMENT_ACCEPTE';
+    public const PAIEMENT_REFUSE = 'PAIEMENT_REFUSE';
+    public const PAIEMENT_BLOQUE = 'PAIEMENT_BLOQUE';
+    public const COMMANDE_A_VERIFIER = 'COMMANDE_A_VERIFIER';
+    public const PAIEMENT_A_REMBOURSER = 'PAIEMENT_A_REMBOURSER';
 
     public function tracer(string $action, string $ressource, ?string $ressourceId, ?string $utilisateurId, ?string $adresseIp): void;
 }

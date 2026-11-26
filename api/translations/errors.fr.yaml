@@ -61,3 +61,19 @@ error:
     jaquette_taille: "L'image dépasse %max% Kio."
     jaquette_type: "Seules les images WebP valides sont acceptées."
     jaquette_dimensions: "Les dimensions de l'image doivent être comprises entre %min% et %max% pixels."
+    # Paiement simulé et anti-fraude (F-07) : messages génériques, jamais une donnée de carte ni un seuil
+    paiement_carte_numero: 'Numéro de carte invalide.'
+    paiement_carte_expiration: "Date d'expiration invalide ou dépassée (format MM/AA)."
+    paiement_carte_cryptogramme: 'Cryptogramme invalide (3 ou 4 chiffres).'
+    paiement_cle_idempotence: "L'en-tête Idempotency-Key est obligatoire : 16 à 64 caractères (lettres, chiffres, tiret, tiret bas)."
+    paiement_carte_refusee: 'Paiement refusé par la banque. Essayez une autre carte.'
+    paiement_fonds_insuffisants: 'Paiement refusé : fonds insuffisants.'
+    paiement_delai_depasse: "La banque n'a pas répondu à temps. Aucun débit n'a été effectué : réessayez."
+    paiement_carte_inconnue: "Paiement refusé : carte non reconnue."
+    paiement_erreur_fournisseur: "Le paiement n'a pas pu être traité. Aucun débit n'a été effectué : réessayez."
+    paiement_bloque: 'Trop de paiements refusés. Réessayez dans %minutes% min.'
+    paiement_limite_cles: "Vous avez atteint la limite de %maximum% clés par 24 h. Cette commande ne peut pas être payée maintenant ; vous pouvez l'annuler."
+    paiement_en_cours: 'Un paiement de cette commande est déjà en cours.'
+    paiement_idempotence_conflit: 'Cette clé de paiement a déjà été utilisée pour une autre commande.'
+    paiement_indisponible: 'Le paiement est momentanément indisponible. Aucun débit n''a été effectué : réessayez dans un instant.'
+    commande_non_payable: "Cette commande ne peut plus être payée : elle a déjà été payée, est en cours de vérification, a expiré ou a été annulée."
