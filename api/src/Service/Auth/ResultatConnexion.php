@@ -15,6 +15,7 @@ final class ResultatConnexion
         public readonly ?Session $session,
         public readonly ?string $jetonIntermediaire,
         public readonly int $intermediaireExpireDans = 0,
+        public readonly bool $enrolement = false,
     ) {
     }
 
@@ -23,9 +24,13 @@ final class ResultatConnexion
         return new self($session, null);
     }
 
-    public static function secondeEtape(string $jetonIntermediaire, int $expireDans): self
+    /**
+     * @param bool $enrolement vrai quand l'A2F est obligatoire mais pas encore configurée (rôle du back-office) : la seconde
+     *                         étape est alors l'enrôlement TOTP, pas la saisie d'un code
+     */
+    public static function secondeEtape(string $jetonIntermediaire, int $expireDans, bool $enrolement = false): self
     {
-        return new self(null, $jetonIntermediaire, $expireDans);
+        return new self(null, $jetonIntermediaire, $expireDans, $enrolement);
     }
 
     public function exigeA2f(): bool

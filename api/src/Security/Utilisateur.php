@@ -24,12 +24,14 @@ final class Utilisateur implements UserInterface, PasswordAuthenticatedUserInter
      * @param string|null $jti        identifiant du jeton d'accès présenté (null hors requête authentifiée par JWT)
      * @param string|null $familleId  session du jeton d'accès
      * @param int|null    $expiration expiration du jeton d'accès (timestamp)
+     * @param bool        $a2fValide  le jeton porte la revendication « a2f » : le second facteur a été vérifié pour cette session
      */
     public function __construct(
         public readonly Compte $compte,
         public readonly ?string $jti = null,
         public readonly ?string $familleId = null,
         public readonly ?int $expiration = null,
+        public readonly bool $a2fValide = false,
     ) {
         // Rôles issus de la table role, préfixés pour Symfony. Aucun ROLE_USER implicite : un compte
         // sans rôle n'a aucun droit (Fail Securely).

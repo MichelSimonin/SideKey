@@ -34,6 +34,18 @@ enum Permission: string
         };
     }
 
+    /**
+     * Permission du back-office : exige, en plus du rôle, un second facteur vérifié pour la session (CDC §11.4, BX-18).
+     * Seules les permissions du client (commander, déposer un avis) s'en passent.
+     */
+    public function estBackOffice(): bool
+    {
+        return match ($this) {
+            self::Commander, self::DeposerAvis => false,
+            default => true,
+        };
+    }
+
     /** Nom court exposé au front (GET /api/moi) pour masquer ce qui n'est pas permis : jamais une autorisation. */
     public function nom(): string
     {

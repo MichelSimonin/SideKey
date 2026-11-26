@@ -61,6 +61,10 @@ final class AuthentificationService
             // 2e étape (F-04) : ni jeton d'accès ni refresh avant la vérification du code TOTP.
             return ResultatConnexion::secondeEtape($this->sessions->emettreJetonIntermediaire($compte), SessionService::DUREE_INTERMEDIAIRE);
         }
+        if ([] !== array_intersect($compte->roles, Compte::ROLES_BACK_OFFICE)) {
+            // A2F obligatoire au back-office (CDC §11.4) : sans A2F configurée, la seule suite possible est l'enrôlement.
+            return ResultatConnexion::secondeEtape($this->sessions->emettreJetonIntermediaire($compte), SessionService::DUREE_INTERMEDIAIRE, enrolement: true);
+        }
 
         return ResultatConnexion::connecte($this->sessions->ouvrir($compte));
     }

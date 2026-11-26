@@ -27,4 +27,10 @@ final class Compte
         public readonly bool $emailVerifie,
     ) {
     }
+
+    /** Le même compte une fois l'A2F activée (la réponse de fin d'enrôlement doit refléter le nouvel état). */
+    public function avecA2fActive(): self
+    {
+        return new self($this->id, $this->email, $this->motDePasseHash, $this->prenom, $this->nom, $this->langue, $this->roles, true, $this->actif, $this->emailVerifie);
+    }
 }

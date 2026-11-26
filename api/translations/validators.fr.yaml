@@ -11,3 +11,5 @@ consent:
     required: 'Vous devez accepter les conditions pour créer un compte.'
 price:
     range: 'Le prix minimum doit être inférieur ou égal au prix maximum.'
+a2f:
+    code_format: 'Saisissez le code à 6 chiffres de votre application, ou un code de secours (ABCDE-FGHJK).'

@@ -28,14 +28,15 @@ final class SessionResponse
     }
 
     /**
-     * Seconde étape requise (A2F, F-04) : ni jeton d'accès ni utilisateur, seulement le jeton intermédiaire.
+     * Seconde étape requise (A2F, F-04) : ni jeton d'accès ni utilisateur, seulement le jeton intermédiaire. « a2f » : saisie d'un
+     * code ; « a2f_enrolement » : A2F obligatoire mais à configurer.
      *
-     * @return array{etape: 'a2f', jetonIntermediaire: string, expireDans: int}
+     * @return array{etape: 'a2f'|'a2f_enrolement', jetonIntermediaire: string, expireDans: int}
      */
     public static function etapeA2f(ResultatConnexion $resultat): array
     {
         return [
-            'etape' => 'a2f',
+            'etape' => $resultat->enrolement ? 'a2f_enrolement' : 'a2f',
             'jetonIntermediaire' => (string) $resultat->jetonIntermediaire,
             'expireDans' => $resultat->intermediaireExpireDans,
         ];

@@ -34,3 +34,8 @@ error:
     import_encodage: 'The file must be UTF-8 encoded.'
     import_vide: 'The file contains no key.'
     import_trop_de_lignes: "The file contains more than %maximum% keys: split it into several imports."
+    # A2F (F-04)
+    a2f_code_invalide: 'Incorrect or expired code.'
+    a2f_deja_active: 'Two-factor authentication is already enabled on this account.'
+    a2f_non_active: 'Two-factor authentication is not enabled on this account.'
+    a2f_enrolement_absent: 'No enrolment in progress: start the setup again.'
