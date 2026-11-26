@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { CATALOGUE_PERMISSION } from '../../features/admin/types'
 import { useAuth } from '../../features/auth/useAuth'
 import { LanguageSwitcher } from './LanguageSwitcher'
 
@@ -20,6 +21,9 @@ export function Layout({ children }: { children: ReactNode }) {
         </Link>
         <nav aria-label={t('header.mainNav')} className="main-nav">
           <Link to="/catalogue">{t('header.catalogue')}</Link>
+          {status === 'authenticated' && user?.permissions.includes(CATALOGUE_PERMISSION) ? (
+            <Link to="/admin">{t('header.admin')}</Link>
+          ) : null}
         </nav>
         <div className="header-actions">
           <nav aria-label={t('header.nav')} className="account-nav">

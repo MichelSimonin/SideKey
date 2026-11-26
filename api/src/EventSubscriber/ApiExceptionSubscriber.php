@@ -78,6 +78,10 @@ final class ApiExceptionSubscriber implements EventSubscriberInterface
             $status = $exception->codeHttp();
             $body = ['message' => $this->translator->trans($exception->cleMessage(), $exception->parametres(), 'errors', $locale)]
                 + $exception->details();
+            $erreurs = array_map(fn (string $cle): string => $this->translator->trans($cle, [], 'errors', $locale), $exception->erreursChamps());
+            if ([] !== $erreurs) {
+                $body['erreurs'] = $erreurs;   // 422 métier : { "erreurs": { "champ": "message" } }
+            }
         } elseif ($status >= 500) {
             $correlationId = bin2hex(random_bytes(8));
             $this->logger->error('Erreur interne de l\'API', [

@@ -24,6 +24,8 @@ api/config/secrets/*/*.decrypt.private.php
 api/vendor/
 api/var/
 api/public/bundles/
+# Jaquettes téléversées via le back-office (F-09) : données d'exécution, jamais versionnées.
+api/public/media/
 api/.phpunit.cache/
 api/.phpunit.result.cache
 api/.php-cs-fixer.cache

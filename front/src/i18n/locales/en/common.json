@@ -12,7 +12,8 @@
       "en": "English"
     },
     "catalogue": "Catalogue",
-    "mainNav": "Main navigation"
+    "mainNav": "Main navigation",
+    "admin": "Administration"
   },
   "home": {
     "title": "Your game keys, delivered instantly",
@@ -161,5 +162,174 @@
     "notFoundTitle": "Game not found",
     "notFoundText": "This game does not exist or is no longer in the catalogue.",
     "back": "Back to the catalogue"
+  },
+  "admin": {
+    "title": "Catalogue administration",
+    "nav": {
+      "label": "Administration sections",
+      "link": "Administration",
+      "games": "Games and offers",
+      "publishers": "Publishers",
+      "platforms": "Platforms"
+    },
+    "access": {
+      "checking": "Checking access rights…",
+      "deniedTitle": "Access denied",
+      "denied": "Your account is not allowed to manage the catalogue."
+    },
+    "errors": {
+      "forbidden": "You are not allowed to perform this action.",
+      "notFound": "This item no longer exists. Reload the page.",
+      "conflict": "The operation is not possible in the current state of the catalogue.",
+      "load": "Unable to load the data.",
+      "retry": "Try again"
+    },
+    "common": {
+      "loading": "Loading…",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirm": "Confirm",
+      "actions": "Actions",
+      "state": "Status",
+      "active": "Active",
+      "inactive": "Inactive",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "games": {
+      "title": "Games and offers",
+      "new": "New game",
+      "search": "Search by title",
+      "status": "Status",
+      "statusOptions": {
+        "tous": "All",
+        "actifs": "Active",
+        "inactifs": "Inactive"
+      },
+      "apply": "Search",
+      "results_one": "{{count}} game",
+      "results_other": "{{count}} games",
+      "none": "No game matches this search.",
+      "caption": "List of games",
+      "columns": {
+        "title": "Title",
+        "publisher": "Publisher",
+        "pegi": "PEGI",
+        "offers": "Offers"
+      },
+      "edit": "Edit {{title}}",
+      "deactivate": "Deactivate",
+      "deactivateFor": "Deactivate {{title}}",
+      "deactivateConfirm": "Deactivate “{{title}}”? The game leaves the catalogue; its offers, keys and order history are kept.",
+      "deactivated": "“{{title}}” has been deactivated.",
+      "searchForm": "Search in games"
+    },
+    "editor": {
+      "newTitle": "New game",
+      "editTitle": "Edit the game",
+      "back": "Back to the list of games",
+      "created": "Game created. You can now add a cover and offers.",
+      "saved": "Game saved.",
+      "inactiveNotice": "This game is deactivated: it does not appear in the catalogue."
+    },
+    "form": {
+      "title": "Title",
+      "slug": "Game address (slug)",
+      "slugHint": "Leave empty to derive it from the title. Lowercase letters, digits and hyphens.",
+      "releaseDate": "Release date",
+      "pegi": "PEGI rating",
+      "pegiOption": "PEGI {{age}}",
+      "pegiPlaceholder": "Choose a rating",
+      "publisher": "Publisher",
+      "publisherPlaceholder": "Choose a publisher",
+      "active": "Game visible in the catalogue",
+      "descriptionFr": "Description in French",
+      "descriptionEn": "Description in English",
+      "descriptionHint": "10 to 4,000 characters, no HTML tags.",
+      "genres": "Genres",
+      "genresHint": "10 genres at most.",
+      "tooShort": "At least 10 characters.",
+      "tooLong": "4,000 characters at most."
+    },
+    "cover": {
+      "title": "Cover",
+      "file": "Cover image",
+      "hint": "WebP only, 512 KiB at most, 100 to 4,000 pixels on each side.",
+      "upload": "Upload",
+      "uploading": "Uploading…",
+      "uploaded": "Cover saved.",
+      "remove": "Remove the cover",
+      "removeConfirm": "Remove this game's cover?",
+      "removed": "Cover removed.",
+      "choose": "Choose an image.",
+      "type": "Only WebP images are accepted.",
+      "size": "The image exceeds 512 KiB."
+    },
+    "offers": {
+      "title": "Offers by platform",
+      "caption": "Offers of the game",
+      "none": "This game has no offer yet.",
+      "columns": {
+        "platform": "Platform",
+        "price": "Price incl. VAT",
+        "threshold": "Alert threshold",
+        "stock": "Available keys"
+      },
+      "edit": "Edit the {{platform}} offer",
+      "priceLabel": "Price incl. VAT in euros",
+      "priceHint": "Example: 14.99",
+      "thresholdLabel": "Stock alert threshold",
+      "activeLabel": "Offer on sale",
+      "saved": "{{platform}} offer saved.",
+      "conflictTitle": "Offer modified by a colleague",
+      "conflictHelp": "Reload the offer to see its latest version, then make your change again.",
+      "reload": "Reload the offer",
+      "reloaded": "Offer reloaded.",
+      "add": "Add an offer",
+      "platform": "Platform",
+      "platformPlaceholder": "Choose a platform",
+      "added": "Offer added.",
+      "noPlatform": "Every platform already has an active offer."
+    },
+    "publishers": {
+      "title": "Publishers",
+      "caption": "List of publishers",
+      "name": "Name",
+      "games": "Games",
+      "newName": "Name of the new publisher",
+      "add": "Add",
+      "created": "Publisher “{{name}}” created.",
+      "updated": "Publisher renamed.",
+      "deleted": "Publisher “{{name}}” deleted.",
+      "editName": "Name of publisher {{name}}",
+      "editFor": "Rename {{name}}",
+      "deleteFor": "Delete {{name}}",
+      "deleteConfirm": "Delete publisher “{{name}}”?",
+      "inUse_one": "Used by {{count}} game: deletion impossible.",
+      "inUse_other": "Used by {{count}} games: deletion impossible.",
+      "none": "No publisher."
+    },
+    "platforms": {
+      "title": "Platforms",
+      "caption": "List of platforms",
+      "code": "Code",
+      "codeHint": "Uppercase letters, digits and underscore, 12 characters at most. The code cannot be changed afterwards.",
+      "label": "Label",
+      "offers": "Offers",
+      "add": "Add",
+      "created": "Platform “{{name}}” created.",
+      "updated": "Platform renamed.",
+      "deleted": "Platform “{{name}}” deleted.",
+      "editLabel": "Label of platform {{name}}",
+      "editFor": "Rename {{name}}",
+      "deleteFor": "Delete {{name}}",
+      "deleteConfirm": "Delete platform “{{name}}”?",
+      "inUse_one": "Used by {{count}} offer: deletion impossible.",
+      "inUse_other": "Used by {{count}} offers: deletion impossible.",
+      "none": "No platform."
+    }
   }
 }

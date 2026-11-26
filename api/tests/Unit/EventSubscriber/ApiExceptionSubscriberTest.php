@@ -87,6 +87,33 @@ final class ApiExceptionSubscriberTest extends TestCase
         self::assertSame('{"message":"Trop de tentatives."}', $response->getContent());
     }
 
+    public function testBusinessExceptionTranslatesFieldErrorsAndDetails(): void
+    {
+        // F-09 : un 422 métier porte une erreur par champ, traduite dans la langue de la requête.
+        $this->translator->addResource('array', ['error.unprocessable' => 'Données invalides.', 'error.invalid_value' => 'Valeur invalide.'], 'fr', 'errors');
+        $this->translator->addResource('array', ['error.unprocessable' => 'Invalid data.', 'error.invalid_value' => 'Invalid value.'], 'en', 'errors');
+
+        $fr = $this->dispatch('/api/admin/jeux', \App\Exception\CatalogueException::invalide(['titre' => 'error.invalid_value', 'descriptions.fr' => 'error.invalid_value']))->getResponse();
+        $en = $this->dispatch('/api/admin/jeux', \App\Exception\CatalogueException::invalide(['titre' => 'error.invalid_value']), 'en')->getResponse();
+
+        self::assertNotNull($fr);
+        self::assertNotNull($en);
+        self::assertSame(422, $fr->getStatusCode());
+        self::assertSame(['message' => 'Données invalides.', 'erreurs' => ['titre' => 'Valeur invalide.', 'descriptions.fr' => 'Valeur invalide.']], json_decode((string) $fr->getContent(), true));
+        self::assertSame(['message' => 'Invalid data.', 'erreurs' => ['titre' => 'Invalid value.']], json_decode((string) $en->getContent(), true));
+    }
+
+    public function testBusinessExceptionDetailsAreForwardedWithoutTechnicalInformation(): void
+    {
+        $this->translator->addResource('array', ['error.offre_conflit' => 'Offre modifiée.'], 'fr', 'errors');
+
+        $response = $this->dispatch('/api/admin/offres/x', new \App\Exception\ConflitOffreException(7))->getResponse();
+
+        self::assertNotNull($response);
+        self::assertSame(409, $response->getStatusCode());
+        self::assertSame(['message' => 'Offre modifiée.', 'versionActuelle' => 7], json_decode((string) $response->getContent(), true));
+    }
+
     public function testRequestsOutsideApiAreIgnored(): void
     {
         $event = $this->dispatch('/', new NotFoundHttpException());

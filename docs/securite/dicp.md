@@ -176,6 +176,8 @@ Toutes les mesures ci-dessous sont **prévues** : aucune n'est encore livrée au
 | Historique des statuts de commande | ENF-12 | §14.2 trigger `trg_commande_historique` | T-02 |
 | Rôles SGBD à moindre privilège (`sk_app` sans DELETE) | ENF-09 | §14.2 droits refusés ; scénario 2 | T-01 |
 | Validation des DTO et contraintes SQL | ENF-09 | Injection SQL dans la recherche et les filtres | F-01, F-09 |
+| Téléversement d'images contrôlé (type lu dans le contenu, taille, dimensions, nom régénéré, servi en statique) | ENF-09 | Script PHP, SVG ou polyglotte déguisé en image → 422 sans fichier écrit ; `.php` sous `/media/` → 404 | F-09 |
+| Verrouillage optimiste des offres (409) | BX-14 | Deux modifications concurrentes : la seconde refusée, la première intacte | F-09 |
 | Sauvegarde et restauration testées | ENF-14 | Exercice documenté (RPO 24 h, RTO 1 h) | T-01, L-02 |
 | En-têtes de sécurité et erreurs sans fuite technique | ENF-09 | ZAP baseline sur la recette | T-04, P-02 |
 | Dépendances et images contrôlées | ENF-09 | CI bloquante (audit, Trivy) | T-03 |

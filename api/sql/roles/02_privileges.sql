@@ -13,12 +13,13 @@ ALTER DEFAULT PRIVILEGES FOR ROLE sk_owner REVOKE EXECUTE ON FUNCTIONS FROM PUBL
 -- ---------------------------------------------------------------------------
 -- sk_app : l'API et le worker
 -- ---------------------------------------------------------------------------
--- Référentiels : lecture seule (modifiés par migration uniquement)
-GRANT SELECT ON langue, role, plateforme TO sk_app;
+-- Référentiels : lecture seule (modifiés par migration uniquement). Les plateformes sont gérées par le back-office (F-09) :
+-- elles figurent dans la liste « lecture et écriture » ci-dessous ; une plateforme utilisée par une offre ne se supprime pas (clé étrangère RESTRICT).
+GRANT SELECT ON langue, role TO sk_app;
 
 -- Données métier : lecture et écriture complètes
 GRANT SELECT, INSERT, UPDATE, DELETE ON
-    editeur, genre, genre_traduction, jeu, jeu_traduction, jeu_genre, offre,
+    editeur, plateforme, genre, genre_traduction, jeu, jeu_traduction, jeu_genre, offre,
     utilisateur, utilisateur_role, code_secours, ligne_commande, avis, import_cles
 TO sk_app;
 

@@ -86,7 +86,7 @@ BEGIN
     PERFORM pg_temp.rejette_en_tant_que('sk_app', 'SELECT rolpassword FROM pg_authid', '42501', 'sk_app ne lit pas les mots de passe des comptes (pg_authid)');
 
     -- Matrice des droits (has_table_privilege)
-    FOREACH t IN ARRAY ARRAY['editeur','genre','genre_traduction','jeu','jeu_traduction','jeu_genre','offre','utilisateur',
+    FOREACH t IN ARRAY ARRAY['editeur','plateforme','genre','genre_traduction','jeu','jeu_traduction','jeu_genre','offre','utilisateur',
                              'utilisateur_role','code_secours','ligne_commande','avis','import_cles'] LOOP
         PERFORM pg_temp.ok(has_table_privilege('sk_app', t, 'SELECT') AND has_table_privilege('sk_app', t, 'INSERT')
                        AND has_table_privilege('sk_app', t, 'UPDATE') AND has_table_privilege('sk_app', t, 'DELETE'),

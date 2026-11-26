@@ -40,6 +40,8 @@ export type ApiErrorBody = {
   erreurs?: Record<string, string>
   /** Précise un 401 de la seconde étape : « code_invalide » (code faux, à corriger) ; sans elle, le jeton intermédiaire a expiré. */
   raison?: string
+  /** Version actuelle d'une offre modifiée par un collègue (409 du verrouillage optimiste, F-09). */
+  versionActuelle?: number
 }
 
 /** POST /api/connexion/a2f/enrolement : le secret du QR code, montré une seule fois. */

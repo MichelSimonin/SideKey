@@ -16,6 +16,9 @@ interface JournalAudit
     public const A2F_ACTIVATION = 'A2F_ACTIVATION';
     public const A2F_CODE_SECOURS = 'A2F_CODE_SECOURS_UTILISE';
     public const A2F_ECHEC = 'A2F_ECHEC';
+    public const CATALOGUE_CREATION = 'CATALOGUE_CREATION';
+    public const CATALOGUE_MODIFICATION = 'CATALOGUE_MODIFICATION';
+    public const CATALOGUE_SUPPRESSION = 'CATALOGUE_SUPPRESSION';
 
     public function tracer(string $action, string $ressource, ?string $ressourceId, ?string $utilisateurId, ?string $adresseIp): void;
 }

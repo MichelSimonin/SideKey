@@ -12,7 +12,8 @@
       "en": "English"
     },
     "catalogue": "Catalogue",
-    "mainNav": "Navigation principale"
+    "mainNav": "Navigation principale",
+    "admin": "Administration"
   },
   "home": {
     "title": "Vos clés de jeux, livrées tout de suite",
@@ -161,5 +162,174 @@
     "notFoundTitle": "Jeu introuvable",
     "notFoundText": "Ce jeu n'existe pas ou n'est plus au catalogue.",
     "back": "Retour au catalogue"
+  },
+  "admin": {
+    "title": "Administration du catalogue",
+    "nav": {
+      "label": "Sections de l'administration",
+      "link": "Administration",
+      "games": "Jeux et offres",
+      "publishers": "Éditeurs",
+      "platforms": "Plateformes"
+    },
+    "access": {
+      "checking": "Vérification des droits d'accès…",
+      "deniedTitle": "Accès refusé",
+      "denied": "Votre compte n'a pas le droit de gérer le catalogue."
+    },
+    "errors": {
+      "forbidden": "Vous n'avez pas le droit d'effectuer cette action.",
+      "notFound": "Cet élément n'existe plus. Rechargez la page.",
+      "conflict": "L'opération est impossible dans l'état actuel du catalogue.",
+      "load": "Impossible de charger les données.",
+      "retry": "Réessayer"
+    },
+    "common": {
+      "loading": "Chargement…",
+      "save": "Enregistrer",
+      "saving": "Enregistrement…",
+      "cancel": "Annuler",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "confirm": "Confirmer",
+      "actions": "Actions",
+      "state": "Statut",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "yes": "Oui",
+      "no": "Non"
+    },
+    "games": {
+      "title": "Jeux et offres",
+      "new": "Nouveau jeu",
+      "search": "Rechercher par titre",
+      "status": "Statut",
+      "statusOptions": {
+        "tous": "Tous",
+        "actifs": "Actifs",
+        "inactifs": "Inactifs"
+      },
+      "apply": "Rechercher",
+      "results_one": "{{count}} jeu",
+      "results_other": "{{count}} jeux",
+      "none": "Aucun jeu ne correspond à cette recherche.",
+      "caption": "Liste des jeux",
+      "columns": {
+        "title": "Titre",
+        "publisher": "Éditeur",
+        "pegi": "PEGI",
+        "offers": "Offres"
+      },
+      "edit": "Modifier {{title}}",
+      "deactivate": "Désactiver",
+      "deactivateFor": "Désactiver {{title}}",
+      "deactivateConfirm": "Désactiver « {{title}} » ? Le jeu disparaît du catalogue ; ses offres, ses clés et l'historique des commandes sont conservés.",
+      "deactivated": "« {{title}} » a été désactivé.",
+      "searchForm": "Recherche dans les jeux"
+    },
+    "editor": {
+      "newTitle": "Nouveau jeu",
+      "editTitle": "Modifier le jeu",
+      "back": "Retour à la liste des jeux",
+      "created": "Jeu créé. Vous pouvez maintenant ajouter une jaquette et des offres.",
+      "saved": "Jeu enregistré.",
+      "inactiveNotice": "Ce jeu est désactivé : il n'apparaît pas au catalogue."
+    },
+    "form": {
+      "title": "Titre",
+      "slug": "Adresse du jeu (slug)",
+      "slugHint": "Laissez vide pour la déduire du titre. Minuscules, chiffres et tirets.",
+      "releaseDate": "Date de sortie",
+      "pegi": "Classification PEGI",
+      "pegiOption": "PEGI {{age}}",
+      "pegiPlaceholder": "Choisir une classification",
+      "publisher": "Éditeur",
+      "publisherPlaceholder": "Choisir un éditeur",
+      "active": "Jeu visible au catalogue",
+      "descriptionFr": "Description en français",
+      "descriptionEn": "Description en anglais",
+      "descriptionHint": "10 à 4 000 caractères, sans balise HTML.",
+      "genres": "Genres",
+      "genresHint": "10 genres au plus.",
+      "tooShort": "10 caractères au minimum.",
+      "tooLong": "4 000 caractères au maximum."
+    },
+    "cover": {
+      "title": "Jaquette",
+      "file": "Image de la jaquette",
+      "hint": "WebP uniquement, 512 Kio au plus, de 100 à 4 000 pixels de côté.",
+      "upload": "Téléverser",
+      "uploading": "Téléversement…",
+      "uploaded": "Jaquette enregistrée.",
+      "remove": "Retirer la jaquette",
+      "removeConfirm": "Retirer la jaquette de ce jeu ?",
+      "removed": "Jaquette retirée.",
+      "choose": "Choisissez une image.",
+      "type": "Seules les images WebP sont acceptées.",
+      "size": "L'image dépasse 512 Kio."
+    },
+    "offers": {
+      "title": "Offres par plateforme",
+      "caption": "Offres du jeu",
+      "none": "Ce jeu n'a pas encore d'offre.",
+      "columns": {
+        "platform": "Plateforme",
+        "price": "Prix TTC",
+        "threshold": "Seuil d'alerte",
+        "stock": "Clés disponibles"
+      },
+      "edit": "Modifier l'offre {{platform}}",
+      "priceLabel": "Prix TTC en euros",
+      "priceHint": "Exemple : 14.99",
+      "thresholdLabel": "Seuil d'alerte de stock",
+      "activeLabel": "Offre en vente",
+      "saved": "Offre {{platform}} enregistrée.",
+      "conflictTitle": "Offre modifiée par un collègue",
+      "conflictHelp": "Rechargez l'offre pour voir sa dernière version, puis refaites votre modification.",
+      "reload": "Recharger l'offre",
+      "reloaded": "Offre rechargée.",
+      "add": "Ajouter une offre",
+      "platform": "Plateforme",
+      "platformPlaceholder": "Choisir une plateforme",
+      "added": "Offre ajoutée.",
+      "noPlatform": "Toutes les plateformes ont déjà une offre active."
+    },
+    "publishers": {
+      "title": "Éditeurs",
+      "caption": "Liste des éditeurs",
+      "name": "Nom",
+      "games": "Jeux",
+      "newName": "Nom du nouvel éditeur",
+      "add": "Ajouter",
+      "created": "Éditeur « {{name}} » créé.",
+      "updated": "Éditeur renommé.",
+      "deleted": "Éditeur « {{name}} » supprimé.",
+      "editName": "Nom de l'éditeur {{name}}",
+      "editFor": "Renommer {{name}}",
+      "deleteFor": "Supprimer {{name}}",
+      "deleteConfirm": "Supprimer l'éditeur « {{name}} » ?",
+      "inUse_one": "Utilisé par {{count}} jeu : suppression impossible.",
+      "inUse_other": "Utilisé par {{count}} jeux : suppression impossible.",
+      "none": "Aucun éditeur."
+    },
+    "platforms": {
+      "title": "Plateformes",
+      "caption": "Liste des plateformes",
+      "code": "Code",
+      "codeHint": "Majuscules, chiffres et tiret bas, 12 caractères au plus. Le code ne pourra plus être modifié.",
+      "label": "Libellé",
+      "offers": "Offres",
+      "add": "Ajouter",
+      "created": "Plateforme « {{name}} » créée.",
+      "updated": "Plateforme renommée.",
+      "deleted": "Plateforme « {{name}} » supprimée.",
+      "editLabel": "Libellé de la plateforme {{name}}",
+      "editFor": "Renommer {{name}}",
+      "deleteFor": "Supprimer {{name}}",
+      "deleteConfirm": "Supprimer la plateforme « {{name}} » ?",
+      "inUse_one": "Utilisée par {{count}} offre : suppression impossible.",
+      "inUse_other": "Utilisée par {{count}} offres : suppression impossible.",
+      "none": "Aucune plateforme."
+    }
   }
 }
