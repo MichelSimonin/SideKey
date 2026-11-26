@@ -14,7 +14,7 @@ use Psr\Clock\ClockInterface;
 /**
  * Émet les JWT signés RS256 par LexikJWTAuthenticationBundle (clé privée hors dépôt, config/jwt/).
  *
- * Revendications : sub (UUID du compte), jti (révocation), fam (session), typ (portée), iat, exp, roles.
+ * Revendications : sub (UUID du compte), jti (révocation), fam (session), typ (portée), a2f (second facteur vérifié), iat, exp, roles.
  * Aucune donnée personnelle au-delà de l'identifiant : l'e-mail et le nom ne figurent pas dans le jeton.
  */
 final class LexikEmetteurJetonAcces implements EmetteurJetonAcces
@@ -25,7 +25,7 @@ final class LexikEmetteurJetonAcces implements EmetteurJetonAcces
     ) {
     }
 
-    public function emettre(Compte $compte, TypeJeton $type, string $jti, string $familleId, int $dureeSecondes): string
+    public function emettre(Compte $compte, TypeJeton $type, string $jti, string $familleId, int $dureeSecondes, bool $a2fValide = false): string
     {
         $maintenant = $this->horloge->now()->getTimestamp();
 
@@ -33,6 +33,7 @@ final class LexikEmetteurJetonAcces implements EmetteurJetonAcces
             'jti' => $jti,
             'fam' => $familleId,
             'typ' => $type->value,
+            'a2f' => $a2fValide,
             'iat' => $maintenant,
             'exp' => $maintenant + $dureeSecondes,
         ]);

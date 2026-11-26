@@ -48,6 +48,42 @@ final class RbacVoterTest extends TestCase
         self::assertSame($attendu ? VoterInterface::ACCESS_GRANTED : VoterInterface::ACCESS_DENIED, $vote);
     }
 
+    /** @return iterable<string, array{string, Permission}> */
+    public static function permissionsDuBackOffice(): iterable
+    {
+        foreach (['GESTIONNAIRE', 'MODERATEUR', 'ADMIN'] as $role) {
+            foreach (Permission::cases() as $permission) {
+                if ($permission->estBackOffice() && \in_array($permission, self::AUTORISE[$role], true)) {
+                    yield "$role / {$permission->nom()}" => [$role, $permission];
+                }
+            }
+        }
+    }
+
+    #[DataProvider('permissionsDuBackOffice')]
+    public function testLeBackOfficeExigeLeSecondFacteurValideDeLaSession(string $role, Permission $permission): void
+    {
+        $voter = new RbacVoter();
+
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->jeton([$role], a2fValide: true), null, [$permission->value]));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $voter->vote($this->jeton([$role], a2fValide: false), null, [$permission->value]), 'le rôle ne suffit pas sans second facteur');
+    }
+
+    public function testLeClientNaPasBesoinDuSecondFacteur(): void
+    {
+        $voter = new RbacVoter();
+
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->jeton(['CLIENT'], a2fValide: false), null, [Permission::Commander->value]));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $voter->vote($this->jeton(['CLIENT'], a2fValide: false), null, [Permission::DeposerAvis->value]));
+    }
+
+    public function testSeulesLesPermissionsDuClientEchappentAuSecondFacteur(): void
+    {
+        $sansA2f = array_filter(Permission::cases(), static fn (Permission $p): bool => !$p->estBackOffice());
+
+        self::assertSame([Permission::Commander, Permission::DeposerAvis], array_values($sansA2f), 'toute nouvelle permission est du back-office par défaut');
+    }
+
     public function testLAdminNeCommandePas(): void
     {
         // Séparation des devoirs : pas de hiérarchie de rôles, l'ADMIN n'hérite pas de CLIENT.
@@ -113,9 +149,9 @@ final class RbacVoterTest extends TestCase
     }
 
     /** @param list<string> $roles */
-    private function jeton(array $roles): UsernamePasswordToken
+    private function jeton(array $roles, bool $a2fValide = true): UsernamePasswordToken
     {
-        $utilisateur = new Utilisateur(FabriqueCompte::creer(1, $roles));
+        $utilisateur = new Utilisateur(FabriqueCompte::creer(1, $roles), a2fValide: $a2fValide);
 
         return new UsernamePasswordToken($utilisateur, 'api', $utilisateur->getRoles());
     }

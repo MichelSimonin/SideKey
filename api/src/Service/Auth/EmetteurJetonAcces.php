@@ -10,6 +10,7 @@ interface EmetteurJetonAcces
     /**
      * @param string $jti       identifiant unique du jeton, base de la révocation
      * @param string $familleId session à laquelle le jeton appartient
+     * @param bool   $a2fValide revendication « a2f » : le second facteur a été vérifié pour cette session (seule elle ouvre le back-office)
      */
-    public function emettre(Compte $compte, TypeJeton $type, string $jti, string $familleId, int $dureeSecondes): string;
+    public function emettre(Compte $compte, TypeJeton $type, string $jti, string $familleId, int $dureeSecondes, bool $a2fValide = false): string;
 }

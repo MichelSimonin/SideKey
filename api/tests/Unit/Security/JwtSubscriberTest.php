@@ -17,6 +17,8 @@ use Lexik\Bundle\JWTAuthenticationBundle\Exception\MissingTokenException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Translation\Loader\ArrayLoader;
 use Symfony\Component\Translation\Translator;
@@ -29,6 +31,7 @@ final class JwtSubscriberTest extends TestCase
 
     private RevocationEnMemoire $revocation;
     private JwtSubscriber $abonne;
+    private RequestStack $requetes;
 
     protected function setUp(): void
     {
@@ -36,7 +39,9 @@ final class JwtSubscriberTest extends TestCase
         $traducteur = new Translator('fr');
         $traducteur->addLoader('array', new ArrayLoader());
         $traducteur->addResource('array', ['error.unauthorized' => 'Authentification requise.'], 'fr', 'errors');
-        $this->abonne = new JwtSubscriber($this->revocation, $traducteur, new NullLogger());
+        $this->requetes = new RequestStack();
+        $this->requetes->push(Request::create('/api/moi'));
+        $this->abonne = new JwtSubscriber($this->revocation, $traducteur, new NullLogger(), $this->requetes);
     }
 
     public function testJetonDAccesValideAccepte(): void
@@ -45,6 +50,49 @@ final class JwtSubscriberTest extends TestCase
         $this->abonne->surJetonDecode($evenement);
 
         self::assertTrue($evenement->isValid());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function routesDeLaSecondeEtape(): iterable
+    {
+        yield 'vérification' => ['/api/connexion/a2f'];
+        yield 'enrôlement' => ['/api/connexion/a2f/enrolement'];
+        yield 'confirmation' => ['/api/connexion/a2f/enrolement/confirmation'];
+    }
+
+    #[DataProvider('routesDeLaSecondeEtape')]
+    public function testLeJetonIntermediaireOuvreLesRoutesDeLaSecondeEtape(string $chemin): void
+    {
+        $this->requetes->push(Request::create($chemin, 'POST'));
+
+        $intermediaire = new JWTDecodedEvent($this->charge(['typ' => TypeJeton::A2f->value]));
+        $this->abonne->surJetonDecode($intermediaire);
+        $acces = new JWTDecodedEvent($this->charge());
+        $this->abonne->surJetonDecode($acces);
+
+        self::assertTrue($intermediaire->isValid());
+        self::assertFalse($acces->isValid(), "le jeton d'accès n'ouvre pas la seconde étape : il faut repasser par le mot de passe");
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function autresRoutes(): iterable
+    {
+        yield 'profil' => ['/api/moi'];
+        yield 'back-office' => ['/api/admin/offres/x/cles'];
+        yield 'préfixe voisin' => ['/api/connexion/a2fx'];
+        yield 'racine de la connexion' => ['/api/connexion'];
+        yield 'casse différente' => ['/api/connexion/A2F'];
+    }
+
+    #[DataProvider('autresRoutes')]
+    public function testLeJetonIntermediaireNOuvreAucuneAutreRoute(string $chemin): void
+    {
+        $this->requetes->push(Request::create($chemin));
+
+        $evenement = new JWTDecodedEvent($this->charge(['typ' => TypeJeton::A2f->value]));
+        $this->abonne->surJetonDecode($evenement);
+
+        self::assertFalse($evenement->isValid(), $chemin);
     }
 
     public function testLeJetonIntermediaireA2fNOuvrePasLAPI(): void

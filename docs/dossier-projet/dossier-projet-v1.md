@@ -204,6 +204,7 @@ Diagrammes : [cas d'utilisation global](../uml/exports/uc-global.svg), [front-of
 - ⏳ Restent : dessiner le **mobile** et le **parcours EN** dans Figma, puis faire la **revue persona** à deux.
 
 - ✅ **Réalisé dans le front** : **E05** connexion / inscription (F-03), `front/src/features/auth/` ; routes `/connexion` et `/inscription`. Accessibilité : étiquettes visibles reliées aux champs, `autocomplete` adapté (`username`, `current-password`, `new-password`, `given-name`, `family-name`, `email`), erreurs reliées par `aria-describedby` et `aria-invalid`, résumé des erreurs annoncé (`role="alert"`) et focalisé, vue active signalée par `aria-current`, décompte de caractères annoncé poliment, aucune limite de temps, mot de passe affichable. FR et EN complets.
+- ✅ **E05, seconde étape (F-04)** : saisie du code (TOTP ou code de secours, `autocomplete="one-time-code"`), **enrôlement** obligatoire pour le back-office (QR code avec texte alternatif, clé de saisie manuelle pour qui ne peut pas scanner, instructions numérotées), **dix codes de secours montrés une seule fois** ; le titre de chaque étape reçoit le focus, les erreurs sont reliées au champ, aucune limite de temps côté utilisateur. Le jeton intermédiaire, le secret et les codes ne vivent qu'en mémoire du composant.
 
 - ✅ **Réalisés dans le front** : **E02** catalogue (`/catalogue`) et **E03** fiche jeu (`/jeux/:slug`), F-01, `front/src/features/catalogue/`. E02 : grille paginée par 20, filtres plateforme / genre / prix / PEGI / recherche / tri regroupés en `fieldset` + `legend`, **critères reflétés dans l'URL** (lien partageable, bouton « précédent »), nombre de résultats annoncé dans une région `aria-live`, message explicite si aucun résultat, pagination en vrais liens. E03 : jaquette, description FR / EN, éditeur, **PEGI écrit en texte**, offres par plateforme avec prix et **stock en toutes lettres** (« 12 clés disponibles »), note moyenne, ajout au panier (API F-05). FR et EN complets.
 
@@ -313,7 +314,8 @@ Les points de la définition de terminé liés au code (tests, FR / EN, validati
 | Réservation des clés | `resa:{commandeId}` | 15 min |
 | Jetons de rafraîchissement | `refresh:{jti}` → `userId:familleId` ; `refresh:used:{jti}` → `familleId` ; `refresh:family:{familleId}` (ensemble) | 7 j |
 | Révocation des jetons d'accès | `jwt:deny:{jti}` ; `jwt:deny:fam:{familleId}` | durée restante / 15 min |
-| Limitation de débit, anti-fraude | `rl:login:{ip}`, `rl:register:{ip}`, `fraud:keys24h:{userId}` | 15 min / 1 h / 24 h |
+| Limitation de débit, anti-fraude | `rl:login:{ip}`, `rl:register:{ip}`, `rl:a2f:{userId}`, `fraud:keys24h:{userId}` | 15 min / 1 h / 15 min / 24 h |
+| Code TOTP déjà utilisé | `a2f:used:{userId}:{pas}` | 120 s |
 | Cache catalogue | `cache:jeu:{slug}:{langue}`, `cache:jeux:v{n}:{langue}:{empreinte}`, `cache:filtres:v{n}:{langue}`, `cache:jeux:version` | 5 min (le compteur de version n'expire pas) |
 
 Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des paniers et des sessions, jamais une commande ni une clé.
@@ -324,6 +326,10 @@ Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des pa
 - **Visiteur** : panier identifié par un cookie opaque (uuid aléatoire), `HttpOnly`, `Secure`, `SameSite=Strict` ; une valeur forgée est ignorée et ne peut pas désigner une autre clé Redis.
 - **Réservation** : minuteur `resa:{commandeId}` aligné sur l'échéance de la commande ; l'expiration réelle reste en base, appliquée chaque minute par une tâche planifiée (Symfony Scheduler, service `worker`) qui appelle `fn_liberer_reservations_expirees`.
 - **Tests** : composant Redis contre un vrai serveur (TTL, expiration réelle, transaction), accès SQL sur la base de test, API de bout en bout ; PostgreSQL et Redis tournent dans la CI.
+
+**Réalisé (F-04)** :
+- **Code TOTP à usage unique** (`RedisUsageUniqueTotp`) : `a2f:used:{userId}:{pas}` posé avec `SET NX EX 120` : le contrôle et l'écriture sont un seul ordre atomique, donc deux requêtes simultanées avec le même code ne passent pas toutes deux. 120 s couvrent la fenêtre de ±1 pas (90 s).
+- **Limitation** `rl:a2f:{userId}` : même compteur à fenêtre fixe que `rl:login:{ip}` (5 tentatives par 15 min), par compte puisque le jeton intermédiaire identifie l'utilisateur.
 
 **Réalisé (F-01)** :
 - **Cache du catalogue** (`RedisCatalogueCache`, interface `CatalogueCache`) : lecture directe (*cache-aside*), valeurs en **JSON** (jamais de `serialize()` PHP) avec TTL de 5 minutes. Une fiche = une clé par langue (`cache:jeu:{slug}:{langue}`). Une liste filtrée = `cache:jeux:v{n}:{langue}:{empreinte}` où `{empreinte}` est le SHA-256 des critères normalisés (ordre des cases, casse et espaces ignorés) : seules des valeurs validées (slug conforme, langue de l'énumération, empreinte) entrent dans une clé.
@@ -387,7 +393,7 @@ Analyse complète (biens, scénarios de menace, risque résiduel accepté) : [di
 
 Patrons de sécurité retenus (Authenticator, Authorization Enforcer, Input Validator, Encrypted Storage, Limited View, Fail Securely…) : [security-patterns.md](../securite/security-patterns.md).
 
-### 7.3 Authentification ✅ conception · ✅ implémentation (F-03) · ⏳ A2F (F-04)
+### 7.3 Authentification ✅ conception · ✅ implémentation (F-03, F-04)
 
 - **Jeton d'accès** JWT **RS256** de 15 min, gardé **en mémoire** dans la SPA (jamais dans `localStorage`, lisible en cas de XSS). Revendications : `sub` (UUID du compte), `jti`, `fam` (session), `typ` (portée), `iat`, `exp`, `roles` ; ni e-mail ni nom dans le jeton. La clé privée vit hors dépôt (`api/config/jwt/*.pem`, générée par `make jwt-keys`).
 - **Jeton de rafraîchissement** opaque (256 bits tirés de `random_bytes`) de 7 jours, à usage unique avec rotation, dans un cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/token/refresh`, stocké (empreinte SHA-256) et révocable dans Redis ; la réutilisation d'un jeton déjà utilisé révoque toute la famille, jetons d'accès compris.
@@ -396,7 +402,11 @@ Patrons de sécurité retenus (Authenticator, Authorization Enforcer, Input Vali
 - **Limitation de débit** : 10 tentatives de connexion par 15 min et par adresse (`rl:login:{ip}`), 429 avec `Retry-After`.
 - **Anti-énumération** : e-mail inconnu, compte désactivé et mauvais mot de passe renvoient le même 401 ; un hachage factice est toujours vérifié pour égaliser le temps de réponse.
 - **Autorisation (RBAC)** : matrice du CDC §11.5 portée par l'énumération `Permission` et décidée par `RbacVoter` ; les rôles sont **relus en base à chaque requête** (un rôle retiré ou un compte désactivé perd l'accès immédiatement, sans attendre les 15 min). Refus par défaut (`access_control`) ; accès refusé = 403 générique.
-- **A2F TOTP** obligatoire pour le back-office, facultative pour les clients : **préparée** par F-03 (le compte à `a2f_active` reçoit seulement un jeton intermédiaire de type `a2f`, 5 min, **refusé** par le pare-feu sur toutes les routes) ; la saisie du code et l'enrôlement sont l'objet de F-04.
+- **A2F TOTP** (F-04) obligatoire pour GESTIONNAIRE, MODERATEUR et ADMIN, facultative pour les clients. Connexion **en deux étapes** : le mot de passe ne donne qu'un **jeton intermédiaire** (JWT de portée `a2f`, 5 min, `a2f: false`), sans refresh ni jeton d'accès. Il n'ouvre **que** `/api/connexion/a2f…` : le pare-feu refuse le jeton d'accès sur ces routes et le jeton intermédiaire partout ailleurs (`JwtSubscriber`, portée déduite de la route). Il est **révoqué après usage** (`jwt:deny:{jti}`) : pas de seconde session. Un rôle du back-office **sans A2F configurée** n'obtient qu'un jeton d'**enrôlement** : QR code (SVG en URI de données, affiché dans un `<img>`) et clé en texte, premier code pour confirmer, puis **10 codes de secours** montrés **une seule fois** ; la session n'est ouverte qu'à la fin.
+- **Back-office fermé sans second facteur** : le jeton d'accès porte la revendication `a2f`, vraie seulement après vérification du code (ou renouvellement d'une session qui l'a passée). `RbacVoter` exige cette revendication pour **toute** permission du back-office (`Permission::estBackOffice()`, vrai par défaut pour toute nouvelle permission) : le rôle ne suffit plus. Les routes F-08 (`/api/admin/**`) en bénéficient sans modification.
+- **Secret et codes** : secret TOTP de 160 bits chiffré en **AES-256-GCM lié au compte** (clé `TOTP_ENC_KEY`, distincte de celles des clés de licence) ; codes de secours de 50 bits (alphabet base32, `random_int`) **hachés en argon2id**, à usage unique (UPDATE conditionnel atomique), régénérés en bloc à l'activation. Un secret illisible (donnée factice du jeu d'essai, altération) compte comme un code faux, jamais comme un succès.
+- **Tentatives limitées** : 5 par compte et par 15 min (`rl:a2f:{userId}`, 429 + `Retry-After`), codes de secours compris : un code à 6 chiffres ne se force pas. Un code TOTP **ne sert qu'une fois** (`a2f:used:{userId}:{pas}`, `SET NX`, 120 s) : un code intercepté puis rejoué dans sa fenêtre de ±1 pas est refusé. Journal d'audit : `A2F_ACTIVATION`, `A2F_ECHEC`, `A2F_CODE_SECOURS_UTILISE`, jamais une valeur secrète.
+- **Constats d'implémentation** : (1) la taille de secret par défaut d'`otphp` est de 1024 bits (103 caractères), trop longue pour une saisie à la main : fixée à 160 bits (RFC 4226 §4) ; (2) une clé Redis de limitation `rl:a2f:…` était rejetée par la validation de F-03 (chiffre dans le préfixe) : corrigée avant tout usage.
 - **Décisions de mise en œuvre** (une ligne chacune) : inscription avec e-mail déjà pris → 409, avec limitation par adresse (`rl:register:{ip}`) ; consentement exigé par le DTO mais non stocké (le schéma T-01 n'a pas de colonne dédiée) ; e-mail non vérifié à la création (l'envoi relève du ticket des e-mails) ; seul `a2f_active` déclenche la seconde étape dans F-03.
 - Diagramme : [séquence de connexion JWT](../uml/exports/seq-connexion-jwt.svg) · décision : [ADR-0003](../adr/0003-jwt-et-jeton-de-rafraichissement.md) (§ « Mise en œuvre »).
 
@@ -778,7 +788,73 @@ $this->journal->tracer(JournalAudit::REVELATION_CLE, 'cle_licence', $cle->id, $u
 
 Les doublons entre deux imports simultanés sont tranchés par la base : `INSERT … ON CONFLICT (empreinte) DO NOTHING RETURNING …` renvoie les lignes réellement insérées, les autres sont comptées comme doublons sans annuler le lot.
 
-### 8.8 Extraits restant à ajouter ⏳
+### 8.8 Seconde étape de connexion : TOTP, codes de secours, A2F exigée par le voter (F-04)
+
+**j) Vérifier un code sans jamais accepter deux fois le même, sans jamais se replier sur un succès**
+
+`api/src/Service/A2f/A2fService.php` (couche métier, extrait) — tentatives limitées avant toute vérification ; un secret illisible vaut un code faux ; un pas TOTP n'est réservé que si le code est bon.
+
+```php
+public function valider(Compte $compte, string $saisie, string $ip, string $jetonIntermediaireJti, int $jetonIntermediaireExp): Session
+{
+    if (!$compte->a2fActive) {
+        throw new A2fEtatIncompatibleException(A2fEtatIncompatibleException::NON_ACTIVE);
+    }
+    $this->limiter($compte);                                  // rl:a2f:{userId} : 5 par 15 min, même avec le bon code
+
+    $saisie = str_replace(' ', '', $saisie);
+    if (1 === preg_match('/^[0-9]{6}$/', $saisie)) {
+        $chiffre = $this->donnees->secretChiffre($compte->id);
+        $valide = null !== $chiffre && $this->codeTotpValide($compte, $chiffre, $saisie);
+    } elseif (null !== ($secours = CodesSecours::normaliser($saisie))) {
+        $valide = $secoursUtilise = $this->codeSecoursValide($compte, $secours);
+    } else {
+        $valide = false;
+    }
+    if (!$valide) {
+        $this->echec($compte, $ip);
+        throw new CodeA2fInvalideException();                  // un seul message : on ne dit pas lequel des contrôles a échoué
+    }
+    $this->revoquerJetonIntermediaire($jetonIntermediaireJti, $jetonIntermediaireExp);   // usage unique
+    return $this->sessions->ouvrir($compte, a2fValide: true);
+}
+```
+
+**k) Un code de secours ne sert qu'une fois, même sous concurrence**
+
+`api/src/Repository/A2fRepository.php` (accès aux données SQL, extrait) — un seul `UPDATE` conditionnel : deux requêtes simultanées avec le même code, une seule obtient « 1 ligne ».
+
+```php
+public function consommerCodeSecours(string $codeId): bool
+{
+    return 1 === $this->connexion->executeStatement(
+        'UPDATE code_secours SET utilise_le = now() WHERE id = :id::uuid AND utilise_le IS NULL',
+        ['id' => strtolower($codeId)],
+    );
+}
+```
+
+**l) Le rôle ne suffit plus : le second facteur de la session est exigé**
+
+`api/src/Security/Voter/RbacVoter.php` (extrait) et `JwtSubscriber::portee()` — la revendication `a2f` ne s'obtient qu'après le code ; chaque route n'accepte que la portée prévue pour elle.
+
+```php
+if ([] === array_intersect($utilisateur->compte->roles, $permission->rolesAutorises())) {
+    return false;
+}
+// Back-office : la session doit avoir passé le second facteur (revendication « a2f » du jeton).
+return !$permission->estBackOffice() || $utilisateur->a2fValide;
+```
+
+```php
+private function portee(): TypeJeton
+{
+    $chemin = $this->requetes->getCurrentRequest()?->getPathInfo() ?? '';
+    return $chemin === self::CHEMIN_A2F || str_starts_with($chemin, self::CHEMIN_A2F.'/') ? TypeJeton::A2f : TypeJeton::Acces;
+}
+```
+
+### 8.9 Extraits restant à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
 |---|---|---|
@@ -805,10 +881,10 @@ Les doublons entre deux imports simultanés sont tranchés par la base : `INSERT
 
 | Partie | Tests | Résultat |
 |---|---|---|
-| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes ; **F-08** : AES-GCM (aller-retour, IV aléatoire, chiffré altéré octet par octet, tronqué, recopié sur une autre offre, autre clé maître), HMAC (forme canonique, dépend du secret), secrets invalides, normalisation et formats refusés (formules, injections, contrôles), import (rapport, doublons, BOM, point-virgule, lots de 500, plafond de 1 000, panne en cours), révélation, Voter de propriété | 298 / 298 ✅ |
-| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) ; **F-08** : import multipart de bout en bout (rapport, compteurs en base, suffixes, journal, réimport, rôles, offre inconnue ou retirée, fichier absent, trop gros, mauvaise extension, 1 001 lignes, message EN), révélation (acheteur, journal à chaque affichage, IP hachée, clé d'autrui = 404, commande à vérifier ou remboursée = 409, back-office = 403, chiffré altéré = 500 générique) | 213 / 213 ✅ |
-| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie ; **F-08** : aucune clé en clair dans la base, les journaux ni les réponses (4 variantes d'écriture, hexadécimal compris), chiffré versionné avec IV et étiquette, empreinte HMAC et non simple SHA-256 | 179 / 179 ✅ |
-| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions ; **F-01** : sérialisation des filtres et de l’URL (assainissement), E02 (grille, filtres en fieldset, aria-live, pagination, jaquettes en différé, HTML non interprété), E03 (offres, stock en texte, ajout au panier, 404) | 131 / 131 ✅ |
+| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes ; **F-08** : AES-GCM (aller-retour, IV aléatoire, chiffré altéré octet par octet, tronqué, recopié sur une autre offre, autre clé maître), HMAC (forme canonique, dépend du secret), secrets invalides, normalisation et formats refusés (formules, injections, contrôles), import (rapport, doublons, BOM, point-virgule, lots de 500, plafond de 1 000, panne en cours), révélation, Voter de propriété ; **F-04** : vecteurs de la RFC 6238, codes de secours (format, unicité, normalisation), chiffrement du secret TOTP, service A2F (limitation, rejeu, usage unique, secret illisible), portée du jeton par route, revendication `a2f`, voter du back-office | 396 / 396 ✅ |
+| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) ; **F-08** : import multipart de bout en bout (rapport, compteurs en base, suffixes, journal, réimport, rôles, offre inconnue ou retirée, fichier absent, trop gros, mauvaise extension, 1 001 lignes, message EN), révélation (acheteur, journal à chaque affichage, IP hachée, clé d'autrui = 404, commande à vérifier ou remboursée = 409, back-office = 403, chiffré altéré = 500 générique) ; **F-04** : dépôt SQL de l'A2F (secret binaire, activation tout ou rien, code consommé une fois), `RedisUsageUniqueTotp`, parcours HTTP d'enrôlement et de connexion en deux étapes | 255 / 255 ✅ |
+| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie ; **F-08** : aucune clé en clair dans la base, les journaux ni les réponses (4 variantes d'écriture, hexadécimal compris), chiffré versionné avec IV et étiquette, empreinte HMAC et non simple SHA-256 ; **F-04** : back-office fermé sans second facteur (toutes les permissions et la route F-08), jeton intermédiaire (portée, durée, usage unique), force brute, rejeu, secrets absents de la base, des réponses, de l'audit et des logs, entrées hostiles | 216 / 216 ✅ |
+| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions ; **F-01** : sérialisation des filtres et de l’URL (assainissement), E02 (grille, filtres en fieldset, aria-live, pagination, jaquettes en différé, HTML non interprété), E03 (offres, stock en texte, ajout au panier, 404) ; **F-04** : seconde étape (code, secours, 429, jeton expiré), enrôlement (QR code, clé, codes de secours montrés une fois, session ouverte après lecture), aucun stockage du jeton, du secret ni des codes | 154 / 154 ✅ |
 | CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml`, tests SQL ; clés JWT jetables générées par la CI | Verte sur chaque PR |
 
 **Sécurité des tests** : les jetons falsifiés sont fabriqués par un utilitaire indépendant de Lexik (`tests/Support/Auth/JwtForge.php`) qui joue l'attaquant ; chaque attaque a son **témoin** (le même jeton, régulier, est accepté) pour que les refus prouvent quelque chose. Les routes du back-office n'existant pas encore, une **sonde RBAC** (chargée en environnement de test uniquement) expose une route par permission et suit le chemin d'une vraie route.
@@ -863,6 +939,10 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | 02/2020 | IETF, [RFC 8725](https://www.rfc-editor.org/rfc/rfc8725) : JSON Web Token Best Current Practices | Refuser `alg: none`, ne pas laisser le jeton choisir l'algorithme, éviter la confusion RS256 / HS256 (clé publique utilisée comme secret HMAC), valider les revendications | Ce sont les deux attaques classiques sur les JWT ; le jeton d'accès de SideKey est un JWT | Décodeur RS256 seul ; tests `JwtAttaquesTest` : `alg: none` (5 variantes), HS256 signé avec la clé publique, mauvaise clé, charge altérée |
 | 25/11/2026 | `composer audit` sur les dépendances de production (`composer.lock`) | Aucun avis connu sur `symfony/security-*` 7.4.24, `lexik/jwt-authentication-bundle` 3.2.0, `lcobucci/jwt` 5.7.0 | Aucun | Audit exécuté à chaque PR (job `api`) |
 | 25/11/2026 | Observation sur le projet (hash relevé en base) | L'algorithme `auto` du composant PasswordHasher de Symfony 7.4.24 produit du **bcrypt** (`$2y$13$…`), pas de l'argon2id que le CDC §11.4 en attendait | Écart entre la conception et le comportement réel du framework : le CDC se fiait au nom « auto » | `algorithm: argon2id` nommé explicitement ; test d'intégration sur le préfixe `$argon2id$` ; CDC corrigé |
+| 25/11/2026 | Symfony, [CVE-2026-133759 à CVE-2026-133762 et apparentés](https://symfony.com/blog/category/security-advisories) (9 avis via `composer audit`, publiés le 25/11/2026) | Failles dans `framework-bundle`, `http-kernel`, `routing`, `serializer` et `doctrine-bridge` ; versions 7.4.0 à 7.4.23 | `composer.lock` de `main` figé en 7.4.23 : **`composer audit`, bloquant en CI, échouait**. Aucune des fonctions touchées n'est exposée par SideKey (pas de client HTTP à cache, de remember-me ni d'encodeur CSV), mais une dépendance vulnérable ne se justifie pas | Mise à jour de correctif vers 7.4.24 (commit dédié de la PR F-04), audit de nouveau vert |
+| 07/11/2026 | GitHub Security Advisories, `spomky-labs/otphp` : [GHSA-526c-px8p-72x8](https://github.com/Spomky-Labs/otphp/security/advisories/GHSA-526c-px8p-72x8) et quatre avis voisins (moyen) | Paramètres d'un URI de provisionnement non bornés (compteur, chiffres, période, étiquette) provoquant des erreurs non rattrapées ; versions < 11.4.4 ou 11.5.0 | Bibliothèque TOTP de F-04. Installée en **11.5.1**, hors des plages touchées. SideKey ne **lit** jamais un URI : il le fabrique côté serveur à partir d'un secret qu'il a tiré lui-même | Aucune ; version minimale `^11.5` en `composer.json` |
+| 05/2011 – 2026 | IETF, [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238) (TOTP) et [RFC 4226](https://www.rfc-editor.org/rfc/rfc4226) (HOTP) | Un code ne doit être accepté qu'une fois dans sa fenêtre ; secret d'au moins 128 bits, 160 recommandés ; tolérance d'horloge limitée ; limitation des essais | Le TOTP est la seconde étape de F-04 | Pas réutilisable (`a2f:used`), secret de 160 bits, ±1 pas, 5 essais par 15 min ; les six vecteurs de test de la RFC 6238 sont dans les tests unitaires |
+| 25/11/2026 | Observation sur le projet (test de F-04) | La taille de secret par défaut d'`otphp` est de 1024 bits (103 caractères), illisible à saisir à la main et refusée par certaines applications | Un défaut de bibliothèque qui dégrade l'usage sans qu'aucun avis ne le signale | Taille fixée à 160 bits, test sur le format (32 caractères base32) |
 
 ---
 
@@ -903,6 +983,7 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Authentification et RBAC | Inscription, connexion, JWT RS256 de 15 min en mémoire, refresh opaque de 7 j à rotation et détection de réutilisation (Redis), CSRF du refresh, argon2id, limitation de débit, matrice RBAC en voter, jeton intermédiaire A2F préparé ; écran E05 FR / EN (F-03) | `api/src/Service/Auth/`, `api/src/Security/`, `api/src/Infrastructure/Redis/`, `front/src/features/auth/`, `api/tests/Security/` |
 | Clés de licence | Import CSV en back-office (rapport ligne à ligne, 1 000 clés, lots de 500), chiffrement AES-256-GCM lié à l'offre, empreinte HMAC unique, 4 derniers caractères seuls en clair, révélation à l'acheteur d'une commande payée, journal d'audit à chaque affichage ; tests de sécurité sans clé en clair (F-08) | `api/src/Service/Cles/`, `api/src/Infrastructure/Crypto/`, `api/tests/Security/ClesLicenceSecuriteTest.php` |
 | Catalogue et cache Redis | `GET /api/jeux` (pagination à 20, recherche sans accent ni casse, filtres plateforme / genre / prix / PEGI, tris en liste blanche), fiche et valeurs des filtres, SQL paramétré, cache Redis à invalidation par version, repli sur PostgreSQL ; écrans E02 et E03 FR / EN, critères dans l'URL, jaquettes en différé (F-01) | `api/src/Service/Catalogue/`, `api/src/Repository/CatalogueRepository.php`, `api/src/Infrastructure/Redis/RedisCatalogueCache.php`, `front/src/features/catalogue/` |
+| A2F TOTP du back-office | Connexion en deux étapes (jeton intermédiaire à portée limitée et à usage unique), enrôlement par QR code, 10 codes de secours hachés à usage unique, secret TOTP chiffré AES-256-GCM, 5 tentatives par 15 min, code non rejouable, **back-office fermé sans second facteur** (revendication `a2f` exigée par le voter) ; écran E05 : code, enrôlement, codes de secours (F-04) | `api/src/Service/A2f/`, `api/src/Controller/Api/A2fController.php`, `api/src/Security/Voter/RbacVoter.php`, `front/src/features/auth/SecondFactorStep.tsx`, `api/tests/Security/A2fSecuriteTest.php` |
 
 ### 13.2 Pas encore fait
 
@@ -912,16 +993,17 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | A2F (saisie du code TOTP, enrôlement, codes de secours), commande et concurrence, paiement, back-office (dont l'écran E13 d'import des clés et l'affichage masqué) ; branchement de l'invalidation du cache catalogue sur les écritures (`invaliderJeu`, `invaliderListes`) | F-04, F-06 à F-10 |
+| Features | Commande et concurrence, paiement, back-office (dont l'écran E13 d'import des clés et l'affichage masqué) ; branchement de l'invalidation du cache catalogue sur les écritures (`invaliderJeu`, `invaliderListes`) | F-04, F-06 à F-10 |
 | Dossier | Comptes rendus quotidiens, veille personnelle (§10, premières entrées faites), recherche anglophone (§11), extraits métier restants (§8.7), jeu d'essai de l'achat concurrent (§9.3.2), captures (dont E02, E03 et E05), bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 
 ### 13.3 Points de vigilance
 
-- **Planning** : le panier (F-05), l'authentification (F-03) et le catalogue (F-01) sont livrés ; le catalogue (F-01) est livré ; l'A2F (F-04) et le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
-- **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-03.
+- **Planning** : le panier (F-05), l'authentification (F-03) et le catalogue (F-01) sont livrés ; le catalogue (F-01) et l'A2F (F-04) sont livrés ; le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
+- **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-01, F-03 et F-04.
+- **Comptes du jeu d'essai et A2F** : les deux comptes à A2F du jeu d'essai (admin et un client) ont un faux secret TOTP, illisible : leur code est refusé (401, pas de 500) ; pour la démonstration, créer un compte du back-office et l'enrôler. Le jeu d'essai ne contient aucun compte du back-office utilisable sans enrôlement préalable.
 - **Proxy et adresse du client** : la limitation de débit s'appuie sur `Request::getClientIp()` ; derrière un reverse proxy (Caddy en recette), `trusted_proxies` devra être configuré par T-04, faute de quoi toutes les requêtes partageraient l'adresse du proxy.
-- **Clés de licence (F-08)** : la route d'import `/api/admin/**` est réservée au rôle, mais l'A2F obligatoire du back-office n'existera qu'avec F-04 ; les clés du jeu d'essai ont un faux chiffré et ne se révèlent pas (erreur 500 générique), il faut importer des clés pour la démonstration ; les secrets `LICENSE_KEY_*` devront être ajoutés aux environnements GitHub de T-04.
+- **Clés de licence (F-08)** : la route d'import `/api/admin/**` est réservée au rôle **et**, depuis F-04, à une session qui a passé le second facteur (403 sinon) ; les clés du jeu d'essai ont un faux chiffré et ne se révèlent pas (erreur 500 générique), il faut importer des clés pour la démonstration ; les secrets `LICENSE_KEY_*` et `TOTP_ENC_KEY` (F-04) devront être ajoutés aux environnements GitHub de T-04.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
 - **Dossier individuel** : les §4.3, §10, §11 et §12 doivent être personnalisés par chaque candidat.
 - **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle est devenue vraie avec la fusion de la PR #41.

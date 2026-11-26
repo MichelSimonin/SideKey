@@ -36,6 +36,12 @@ services:
             $cleEmpreinteBase64: '%env(LICENSE_KEY_HMAC_KEY)%'
 
 
+    # Secret TOTP (F-04, ADR-0004) : AES-256-GCM, un secret de 32 octets en base64, distinct de ceux des clés de licence.
+    # Résolu au premier usage : un secret absent ou invalide bloque seulement l'enrôlement et la vérification A2F.
+    App\Infrastructure\Crypto\ChiffreurSecretTotp:
+        arguments:
+            $cleBase64: '%env(TOTP_ENC_KEY)%'
+
 when@test:
     services:
         # Sonde RBAC des tests de sécurité F-03 : jamais chargée hors environnement de test.

@@ -65,7 +65,29 @@
       "network": "Impossible de joindre le serveur. Vérifiez votre connexion.",
       "rateLimited": "Trop de tentatives. Réessayez dans {{minutes}} min."
     },
-    "secondFactor": "Ce compte est protégé par la double authentification. La saisie du code sera disponible prochainement."
+    "a2f": {
+      "codeTitle": "Vérification en deux étapes",
+      "codeIntro": "Pour protéger votre compte, saisissez le code à 6 chiffres affiché par votre application d'authentification, ou l'un de vos codes de secours.",
+      "codeLabel": "Code d'authentification",
+      "codeHint": "6 chiffres, ou un code de secours de la forme ABCDE-FGHJK. Chaque code de secours ne sert qu'une fois.",
+      "confirmHint": "Les 6 chiffres affichés par l'application après avoir ajouté SideKey.",
+      "verify": "Vérifier le code",
+      "activate": "Activer la double authentification",
+      "restart": "Revenir à la connexion",
+      "invalidCode": "Code incorrect ou expiré.",
+      "expired": "Votre connexion a expiré. Saisissez de nouveau votre mot de passe.",
+      "enrolmentTitle": "Activer la double authentification",
+      "enrolmentIntro": "La double authentification est obligatoire pour accéder au back-office. Configurez-la maintenant, en trois étapes.",
+      "step1": "Installez une application d'authentification (par exemple Aegis, FreeOTP ou Google Authenticator).",
+      "step2": "Scannez le QR code ci-dessous, ou saisissez la clé à la main.",
+      "step3": "Saisissez le code à 6 chiffres affiché par l'application pour confirmer.",
+      "qrAlt": "QR code à scanner avec votre application d'authentification pour ajouter SideKey",
+      "manual": "Vous ne pouvez pas scanner ? Saisissez cette clé dans l'application :",
+      "secretLabel": "Clé de configuration",
+      "codesTitle": "Vos codes de secours",
+      "codesWarning": "Conservez ces 10 codes en lieu sûr. Ils ne seront plus jamais affichés. Chacun ne sert qu'une fois, si vous perdez l'accès à votre application.",
+      "codesDone": "J'ai conservé mes codes, continuer"
+    }
   },
   "catalogue": {
     "title": "Catalogue",

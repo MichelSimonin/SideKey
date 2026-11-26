@@ -32,7 +32,7 @@ final class UtilisateurProvider implements PayloadAwareUserProviderInterface
     public function loadUserByIdentifierAndPayload(string $identifier, array $payload): UserInterface
     {
         return $this->charger($identifier, \is_string($payload['jti'] ?? null) ? $payload['jti'] : null,
-            \is_string($payload['fam'] ?? null) ? $payload['fam'] : null, \is_int($payload['exp'] ?? null) ? $payload['exp'] : null);
+            \is_string($payload['fam'] ?? null) ? $payload['fam'] : null, \is_int($payload['exp'] ?? null) ? $payload['exp'] : null, true === ($payload['a2f'] ?? null));
     }
 
     public function refreshUser(UserInterface $user): UserInterface
@@ -41,7 +41,7 @@ final class UtilisateurProvider implements PayloadAwareUserProviderInterface
             throw new UnsupportedUserException();
         }
 
-        return $this->charger($user->getUserIdentifier(), $user->jti, $user->familleId, $user->expiration);
+        return $this->charger($user->getUserIdentifier(), $user->jti, $user->familleId, $user->expiration, $user->a2fValide);
     }
 
     public function supportsClass(string $class): bool
@@ -49,13 +49,13 @@ final class UtilisateurProvider implements PayloadAwareUserProviderInterface
         return Utilisateur::class === $class || is_subclass_of($class, Utilisateur::class);
     }
 
-    private function charger(string $id, ?string $jti = null, ?string $familleId = null, ?int $expiration = null): Utilisateur
+    private function charger(string $id, ?string $jti = null, ?string $familleId = null, ?int $expiration = null, bool $a2fValide = false): Utilisateur
     {
         $compte = $this->comptes->parId($id);
         if (null === $compte || !$compte->actif) {
             throw new UserNotFoundException();   // message générique : rien ne distingue inconnu et désactivé
         }
 
-        return new Utilisateur($compte, $jti, $familleId, $expiration);
+        return new Utilisateur($compte, $jti, $familleId, $expiration, $a2fValide);
     }
 }

@@ -144,6 +144,55 @@ final class AuthentificationServiceTest extends TestCase
         self::assertSame([], $this->refresh->actifs, 'aucun refresh n\'existe tant que l\'A2F n\'est pas validée');
     }
 
+    /** @return iterable<string, array{string}> */
+    public static function rolesDuBackOffice(): iterable
+    {
+        yield 'gestionnaire' => ['GESTIONNAIRE'];
+        yield 'modérateur' => ['MODERATEUR'];
+        yield 'administrateur' => ['ADMIN'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('rolesDuBackOffice')]
+    public function testUnRoleDuBackOfficeSansA2fNObtientQueL_Enrolement(string $role): void
+    {
+        $this->comptes->ajouter(FabriqueCompte::creer(1, [$role], a2f: false));
+
+        $resultat = $this->service->connecter('compte1@sidekey.test', FabriqueCompte::MOT_DE_PASSE, '203.0.113.7');
+
+        self::assertTrue($resultat->exigeA2f());
+        self::assertTrue($resultat->enrolement, "A2F obligatoire au back-office : la seule suite est l'enrôlement");
+        self::assertNull($resultat->session, 'aucune session, aucun refresh, sans second facteur');
+        self::assertSame('a2f', EmetteurFactice::lire((string) $resultat->jetonIntermediaire)['type']);
+        self::assertSame([], $this->refresh->actifs);
+    }
+
+    public function testUnCompteAvecA2fActiveNEstPasEnEnrolement(): void
+    {
+        $this->comptes->ajouter(FabriqueCompte::creer(1, ['ADMIN'], a2f: true));
+
+        $resultat = $this->service->connecter('compte1@sidekey.test', FabriqueCompte::MOT_DE_PASSE, '203.0.113.7');
+
+        self::assertTrue($resultat->exigeA2f());
+        self::assertFalse($resultat->enrolement, 'étape « code »');
+    }
+
+    public function testUnClientSansA2fSeConnecteSansSecondeEtape(): void
+    {
+        $this->comptes->ajouter(FabriqueCompte::creer(1, ['CLIENT']));
+
+        $resultat = $this->service->connecter('compte1@sidekey.test', FabriqueCompte::MOT_DE_PASSE, '203.0.113.7');
+
+        self::assertFalse($resultat->exigeA2f(), 'A2F facultative pour les clients (BX-07)');
+        self::assertFalse(EmetteurFactice::lire((string) $resultat->session?->jetonAcces)['a2f'], 'sans revendication a2f');
+    }
+
+    public function testUnCompteMultiRoleAvecUnRoleDuBackOfficeEstEnrole(): void
+    {
+        $this->comptes->ajouter(FabriqueCompte::creer(1, ['CLIENT', 'MODERATEUR']));
+
+        self::assertTrue($this->service->connecter('compte1@sidekey.test', FabriqueCompte::MOT_DE_PASSE, '203.0.113.7')->enrolement);
+    }
+
     public function testUnHashBcryptEstRemplaceParDeLArgon2idALaConnexion(): void
     {
         // Les comptes du jeu d'essai sont en bcrypt : ils migrent à la première connexion.

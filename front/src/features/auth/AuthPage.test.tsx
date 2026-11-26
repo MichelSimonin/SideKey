@@ -125,7 +125,7 @@ describe('E05 — connexion', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Réessayez dans 13 min.')
   })
 
-  it('informe qu’une seconde étape est requise pour un compte A2F, sans connecter', async () => {
+  it('passe à la seconde étape pour un compte A2F, sans connecter', async () => {
     const user = userEvent.setup()
     stubFetch(() => jsonResponse({ etape: 'a2f', jetonIntermediaire: 'jeton', expireDans: 300 }))
     renderAt('/connexion')
@@ -134,9 +134,9 @@ describe('E05 — connexion', () => {
     await user.type(screen.getByLabelText('Mot de passe'), 'x')
     await user.click(screen.getByRole('button', { name: 'Se connecter' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent('double authentification')
+    expect(await screen.findByRole('heading', { level: 2, name: 'Vérification en deux étapes' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Mot de passe')).not.toBeInTheDocument()
     expect(getAccessToken()).toBeNull()
-    expect(screen.getByLabelText('Mot de passe')).toHaveValue('')
   })
 
   it('désactive le bouton pendant l’envoi', async () => {

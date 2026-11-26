@@ -13,6 +13,9 @@ interface JournalAudit
 {
     public const REVELATION_CLE = 'REVELATION_CLE';
     public const IMPORT_CLES = 'IMPORT_CLES';
+    public const A2F_ACTIVATION = 'A2F_ACTIVATION';
+    public const A2F_CODE_SECOURS = 'A2F_CODE_SECOURS_UTILISE';
+    public const A2F_ECHEC = 'A2F_ECHEC';
 
     public function tracer(string $action, string $ressource, ?string $ressourceId, ?string $utilisateurId, ?string $adresseIp): void;
 }

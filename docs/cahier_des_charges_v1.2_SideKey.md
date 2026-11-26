@@ -622,7 +622,8 @@ Ces objets sont livrés dans les **migrations Doctrine** (SQL brut versionné).
 | Famille de jetons *(F-03)* | `refresh:family:{familleId}` | Set | 7 j | BX-07 |
 | Révocation des JWT | `jwt:deny:{jti}` | String | durée de vie restante du jeton | BX-07 |
 | Révocation d'une session *(F-03)* | `jwt:deny:fam:{familleId}` | String | 15 min (durée d'un jeton d'accès) | BX-07 |
-| Limitation de débit | `rl:login:{ip}`, `rl:register:{ip}` *(F-03)*, `rl:pay:{userId}` | Compteur | 15 min / 1 h / 1 h | BX-15 |
+| Code TOTP déjà utilisé *(F-04)* | `a2f:used:{userId}:{pas}` | String | 120 s | BX-07 |
+| Limitation de débit | `rl:login:{ip}`, `rl:register:{ip}` *(F-03)*, `rl:a2f:{userId}` *(F-04)*, `rl:pay:{userId}` | Compteur | 15 min / 1 h / 1 h | BX-15 |
 | Compteurs anti-fraude | `fraud:keys24h:{userId}` | Compteur | 24 h | BX-15 |
 | Cache catalogue | `cache:jeu:{slug}:{langue}` | String JSON | 5 min | BX-01 |
 | Idempotence du paiement | `idem:{cle}` | String | 24 h | BX-03 |
@@ -716,6 +717,7 @@ DTO validés par **Symfony Validator** (types, bornes, formats, listes de valeur
 - **TOTP**, avec 10 codes de secours à usage unique, hachés.
 - **Obligatoire** pour les rôles GESTIONNAIRE, MODERATEUR et ADMIN (BX-18) ; **facultative** pour les clients (BX-07).
 - La connexion se fait en deux étapes : mot de passe, puis un jeton intermédiaire limité qui ne donne accès qu'à la saisie du code A2F, puis les jetons définitifs.
+- *Précisions de mise en œuvre (F-04)* : jeton intermédiaire de 5 min, à usage unique, valable sur les seules routes `/api/connexion/a2f` ; un rôle du back-office sans A2F configurée n'obtient que l'enrôlement ; le jeton d'accès porte la revendication `a2f`, exigée pour toute permission du back-office ; secret TOTP de 160 bits chiffré en AES-256-GCM (clé `TOTP_ENC_KEY` distincte) ; 5 tentatives par compte et par 15 min ; un code TOTP ne sert qu'une fois ; codes de secours de 50 bits hachés en argon2id, régénérés en bloc à l'activation.
 
 ### 11.5 Matrice RBAC
 | Permission | Visiteur | Client | Gestionnaire | Modérateur | Admin |

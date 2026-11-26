@@ -35,3 +35,8 @@ error:
     import_encodage: 'Le fichier doit être encodé en UTF-8.'
     import_vide: 'Le fichier ne contient aucune clé.'
     import_trop_de_lignes: "Le fichier contient plus de %maximum% clés : découpez-le en plusieurs imports."
+    # A2F (F-04)
+    a2f_code_invalide: 'Code incorrect ou expiré.'
+    a2f_deja_active: "La double authentification est déjà activée sur ce compte."
+    a2f_non_active: "La double authentification n'est pas activée sur ce compte."
+    a2f_enrolement_absent: "Aucun enrôlement en cours : recommencez la configuration."

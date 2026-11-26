@@ -33,14 +33,20 @@ final class SessionService
     ) {
     }
 
-    /** Ouvre une nouvelle session (nouvelle famille de jetons). */
-    public function ouvrir(Compte $compte): Session
+    /**
+     * Ouvre une nouvelle session (nouvelle famille de jetons).
+     *
+     * @param bool|null $a2fValide vrai quand le second facteur vient d'être vérifié (A2fService). Par défaut, la revendication reflète
+     *                             l'état du compte (a2f_active) : un compte à A2F n'atteint cette méthode qu'après son code
+     *                             (la connexion ne lui remet qu'un jeton intermédiaire), les autres n'ont rien à vérifier
+     */
+    public function ouvrir(Compte $compte, ?bool $a2fValide = null): Session
     {
         $familleId = self::uuidV4();
         $jetonRefresh = self::nouveauJeton();
         $this->refresh->enregistrer(self::empreinte($jetonRefresh), $compte->id, $familleId);
 
-        return $this->session($compte, $familleId, $jetonRefresh);
+        return $this->session($compte, $familleId, $jetonRefresh, $a2fValide ?? $compte->a2fActive);
     }
 
     /** Jeton intermédiaire de la connexion en deux étapes : portée « a2f », 5 minutes, aucun refresh associé. */
@@ -81,7 +87,8 @@ final class SessionService
             throw new SessionInvalideException();
         }
 
-        return $this->session($compte, (string) $rotation->familleId, $nouveauJeton);
+        // Une session ne s'ouvre pour un compte à A2F qu'après le code : la renouveler garde donc la revendication.
+        return $this->session($compte, (string) $rotation->familleId, $nouveauJeton, $compte->a2fActive);
     }
 
     /**
@@ -100,9 +107,9 @@ final class SessionService
         $this->revocation->revoquerFamille($familleId, self::DUREE_ACCES);
     }
 
-    private function session(Compte $compte, string $familleId, string $jetonRefresh): Session
+    private function session(Compte $compte, string $familleId, string $jetonRefresh, bool $a2fValide): Session
     {
-        $jetonAcces = $this->emetteur->emettre($compte, TypeJeton::Acces, self::jti(), $familleId, self::DUREE_ACCES);
+        $jetonAcces = $this->emetteur->emettre($compte, TypeJeton::Acces, self::jti(), $familleId, self::DUREE_ACCES, $a2fValide);
 
         return new Session($compte, $jetonAcces, self::DUREE_ACCES, $jetonRefresh);
     }

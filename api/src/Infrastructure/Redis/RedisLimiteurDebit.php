@@ -19,7 +19,7 @@ use App\Service\Auth\LimiteurDebit;
  */
 final class RedisLimiteurDebit implements LimiteurDebit
 {
-    private const CLE = '/^rl:[a-z]+:[0-9a-fA-F.:]{2,45}$|^rl:[a-z]+:inconnue$/';
+    private const CLE = '/^rl:[a-z0-9]+:[0-9a-fA-F.:-]{2,45}$|^rl:[a-z0-9]+:inconnue$/';
 
     private const SCRIPT = <<<'LUA'
         local compteur = redis.call('INCR', KEYS[1])

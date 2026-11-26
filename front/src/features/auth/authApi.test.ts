@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getAccessToken } from '../../api/session'
 import { header, jsonResponse, mockApi, sessionPayload, setCsrfCookie, USER } from '../../test/helpers'
-import { login, logout, register } from './authApi'
+import { confirmEnrolment, login, logout, openSession, register, startEnrolment, verifyCode } from './authApi'
 
 describe('login', () => {
   it('installe la session en mémoire et renvoie l’utilisateur', async () => {
@@ -21,18 +21,29 @@ describe('login', () => {
 
     const result = await login({ email: 'admin@sidekey.test', motDePasse: 'x' }, { fetchFn })
 
-    expect(result).toEqual({ kind: 'second-factor', expiresIn: 300 })
+    expect(result).toEqual({ kind: 'second-factor', mode: 'code', token: 'jeton-intermediaire', expiresIn: 300 })
     expect(getAccessToken()).toBeNull()
   })
 
-  it('le jeton intermédiaire n’est pas gardé (la saisie du code arrive avec F-04)', async () => {
+  it('un compte du back-office sans A2F est orienté vers l’enrôlement', async () => {
+    const { fetchFn } = mockApi({
+      'POST connexion': [jsonResponse({ etape: 'a2f_enrolement', jetonIntermediaire: 'jeton-i', expireDans: 300 })],
+    })
+
+    const result = await login({ email: 'gestionnaire@sidekey.test', motDePasse: 'x' }, { fetchFn })
+
+    expect(result).toEqual({ kind: 'second-factor', mode: 'enrolment', token: 'jeton-i', expiresIn: 300 })
+    expect(getAccessToken()).toBeNull()
+  })
+
+  it('le jeton intermédiaire n’est jamais écrit dans un stockage du navigateur', async () => {
     const { fetchFn } = mockApi({
       'POST connexion': [jsonResponse({ etape: 'a2f', jetonIntermediaire: 'jeton-intermediaire', expireDans: 300 })],
     })
 
     await login({ email: 'admin@sidekey.test', motDePasse: 'x' }, { fetchFn })
 
-    expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain('jeton-intermediaire')
+    expect(JSON.stringify({ ...localStorage, ...sessionStorage }) + document.cookie).not.toContain('jeton-intermediaire')
   })
 
   it('laisse remonter l’erreur de l’API sans installer de session', async () => {
@@ -102,5 +113,70 @@ describe('logout', () => {
     await expect(logout({ fetchFn })).resolves.toBeUndefined()
 
     expect(getAccessToken()).toBeNull()
+  })
+})
+
+describe('seconde étape (A2F)', () => {
+  it('verifyCode présente le jeton intermédiaire, jamais le jeton d’accès, puis installe la session', async () => {
+    const { fetchFn, calls } = mockApi({ 'POST connexion/a2f': [jsonResponse(sessionPayload('jwt-definitif'))] })
+
+    const user = await verifyCode('jeton-intermediaire', '123456', { fetchFn })
+
+    expect(user).toEqual(USER)
+    expect(header(calls[0], 'Authorization')).toBe('Bearer jeton-intermediaire')
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ code: '123456' })
+    expect(getAccessToken()).toBe('jwt-definitif')
+  })
+
+  it('un 401 de la seconde étape ne déclenche aucun rafraîchissement et n’installe rien', async () => {
+    const { fetchFn, mock } = mockApi({
+      'POST connexion/a2f': [jsonResponse({ message: 'Code incorrect ou expiré.', raison: 'code_invalide' }, 401)],
+    })
+    setCsrfCookie()
+
+    await expect(verifyCode('jeton-intermediaire', '000000', { fetchFn })).rejects.toMatchObject({
+      status: 401,
+      body: { raison: 'code_invalide' },
+    })
+
+    expect(mock).toHaveBeenCalledTimes(1)   // pas d'appel à /token/refresh
+    expect(getAccessToken()).toBeNull()
+  })
+
+  it('startEnrolment renvoie le secret et le QR code', async () => {
+    const { fetchFn, calls } = mockApi({
+      'POST connexion/a2f/enrolement': [jsonResponse({ secret: 'ABCDEFGHABCDEFGHABCDEFGHABCDEFGH', uri: 'otpauth://totp/x', qrCode: 'data:image/svg+xml;base64,AAAA' })],
+    })
+
+    const data = await startEnrolment('jeton-i', { fetchFn })
+
+    expect(data.secret).toHaveLength(32)
+    expect(header(calls[0], 'Authorization')).toBe('Bearer jeton-i')
+  })
+
+  it('confirmEnrolment n’ouvre PAS la session : les codes de secours doivent d’abord être vus', async () => {
+    const codes = Array.from({ length: 10 }, (_, i) => `ABCDE-FGHJ${i}`)
+    const { fetchFn } = mockApi({
+      'POST connexion/a2f/enrolement/confirmation': [jsonResponse({ ...sessionPayload('jwt-neuf'), codesSecours: codes }, 201)],
+    })
+
+    const confirmation = await confirmEnrolment('jeton-i', '123456', { fetchFn })
+
+    expect(confirmation.codesSecours).toEqual(codes)
+    expect(getAccessToken()).toBeNull()
+
+    openSession(confirmation)
+
+    expect(getAccessToken()).toBe('jwt-neuf')
+  })
+
+  it('les codes de secours ne sont jamais écrits dans un stockage du navigateur', async () => {
+    const { fetchFn } = mockApi({
+      'POST connexion/a2f/enrolement/confirmation': [jsonResponse({ ...sessionPayload('jwt-neuf'), codesSecours: ['ZZZZZ-YYYYY'] }, 201)],
+    })
+
+    openSession(await confirmEnrolment('jeton-i', '123456', { fetchFn }))
+
+    expect(JSON.stringify({ ...localStorage, ...sessionStorage }) + document.cookie).not.toContain('ZZZZZ-YYYYY')
   })
 })

@@ -12,13 +12,14 @@ use Lexik\Bundle\JWTAuthenticationBundle\Events;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Branche le cycle de vie des jetons (révocation, portée) et le contrat d'erreur de l'API sur LexikJWT.
  *
- *  - un JWT n'est accepté par le pare-feu que s'il est de type « access », porte un sujet (UUID), un jti et une famille, et
+ *  - un JWT n'est accepté par le pare-feu que s'il est de la portée de la route (« access », ou « a2f » sur /api/connexion/a2f), porte un sujet (UUID), un jti et une famille, et
  *    n'a été révoqué ni individuellement (jwt:deny:{jti}) ni avec sa session ;
  *  - si Redis ne répond pas, le jeton est refusé : on ne peut pas prouver qu'il n'est pas révoqué
  *    (Fail Securely, ADR-0003) ;
@@ -27,6 +28,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  */
 final class JwtSubscriber implements EventSubscriberInterface
 {
+    public const CHEMIN_A2F = '/api/connexion/a2f';
     private const SUJET = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/';
     private const JTI = '/^[0-9a-f]{32}$/';
     private const FAMILLE = '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/';
@@ -35,6 +37,7 @@ final class JwtSubscriber implements EventSubscriberInterface
         private readonly RevocationJwt $revocation,
         private readonly TranslatorInterface $translator,
         private readonly LoggerInterface $logger,
+        private readonly RequestStack $requetes,
     ) {
     }
 
@@ -55,7 +58,7 @@ final class JwtSubscriber implements EventSubscriberInterface
         $jti = $charge['jti'] ?? null;
         $famille = $charge['fam'] ?? null;
 
-        if (TypeJeton::Acces->value !== ($charge['typ'] ?? null)   // le jeton intermédiaire A2F n'ouvre pas l'API
+        if ($this->portee()->value !== ($charge['typ'] ?? null)   // chaque route n'accepte que la portée prévue pour elle
             || !\is_string($sujet) || 1 !== preg_match(self::SUJET, $sujet)
             || !\is_string($jti) || 1 !== preg_match(self::JTI, $jti)
             || !\is_string($famille) || 1 !== preg_match(self::FAMILLE, $famille)) {
@@ -72,6 +75,18 @@ final class JwtSubscriber implements EventSubscriberInterface
             $this->logger->error('Liste de révocation des jetons indisponible : jeton refusé', ['exception' => $erreur]);
             $evenement->markAsInvalid();
         }
+    }
+
+    /**
+     * Portée exigée par la route en cours : le jeton intermédiaire (« a2f ») n'ouvre que les routes de la seconde étape
+     * (/api/connexion/a2f…), le jeton d'accès (« access ») n'ouvre pas ces routes mais toutes les autres. Aucun jeton
+     * n'est donc valable partout : le jeton intermédiaire ne permet jamais d'atteindre l'API sans second facteur.
+     */
+    private function portee(): TypeJeton
+    {
+        $chemin = $this->requetes->getCurrentRequest()?->getPathInfo() ?? '';
+
+        return $chemin === self::CHEMIN_A2F || str_starts_with($chemin, self::CHEMIN_A2F.'/') ? TypeJeton::A2f : TypeJeton::Acces;
     }
 
     public function surEchec(JWTFailureEventInterface $evenement): void

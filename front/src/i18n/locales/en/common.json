@@ -65,7 +65,29 @@
       "network": "Unable to reach the server. Check your connection.",
       "rateLimited": "Too many attempts. Try again in {{minutes}} min."
     },
-    "secondFactor": "This account is protected by two-factor authentication. Code entry will be available soon."
+    "a2f": {
+      "codeTitle": "Two-step verification",
+      "codeIntro": "To protect your account, enter the 6-digit code shown by your authenticator app, or one of your backup codes.",
+      "codeLabel": "Authentication code",
+      "codeHint": "6 digits, or a backup code like ABCDE-FGHJK. Each backup code can be used once.",
+      "confirmHint": "The 6 digits shown by the app after you added SideKey.",
+      "verify": "Verify code",
+      "activate": "Enable two-factor authentication",
+      "restart": "Back to sign in",
+      "invalidCode": "Incorrect or expired code.",
+      "expired": "Your sign-in has expired. Enter your password again.",
+      "enrolmentTitle": "Enable two-factor authentication",
+      "enrolmentIntro": "Two-factor authentication is required to access the back office. Set it up now, in three steps.",
+      "step1": "Install an authenticator app (for example Aegis, FreeOTP or Google Authenticator).",
+      "step2": "Scan the QR code below, or enter the key by hand.",
+      "step3": "Enter the 6-digit code shown by the app to confirm.",
+      "qrAlt": "QR code to scan with your authenticator app to add SideKey",
+      "manual": "Cannot scan? Enter this key in the app:",
+      "secretLabel": "Setup key",
+      "codesTitle": "Your backup codes",
+      "codesWarning": "Keep these 10 codes somewhere safe. They will never be shown again. Each one can be used once, if you lose access to your app.",
+      "codesDone": "I have saved my codes, continue"
+    }
   },
   "catalogue": {
     "title": "Catalogue",

@@ -11,3 +11,5 @@ consent:
     required: 'You must accept the terms to create an account.'
 price:
     range: 'The minimum price must be less than or equal to the maximum price.'
+a2f:
+    code_format: 'Enter the 6-digit code from your app, or a backup code (ABCDE-FGHJK).'
