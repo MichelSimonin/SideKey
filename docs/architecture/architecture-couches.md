@@ -57,6 +57,7 @@ api/src/
 ├── Entity/  Enum/           modèle de domaine
 ├── Infrastructure/Redis/    panier, réservations, révocation, compteurs, cache
 ├── Infrastructure/Crypto/   AES-256-GCM (clés) et HMAC-SHA256 (empreintes)
+├── Infrastructure/Media/    jaquettes sur disque (public/media), nom régénéré, écriture atomique
 ├── Infrastructure/Payment/  PSP simulé derrière PaymentProviderInterface
 ├── Security/                utilisateur, fournisseur, permissions (matrice RBAC), jetons JWT, cookies et CSRF
 ├── Security/Voter/          autorisations (rôle + propriété)
@@ -166,7 +167,9 @@ retourné par l'API (`US-13`), jamais un calcul local.
   par changement de version ; les anciennes entrées expirent seules). **Toute écriture qui modifie
   le catalogue appelle les deux** : jeu, traduction, genre, offre ou prix (F-09), import de clés
   (F-08), réservation et vente de clés (F-06), modération d'un avis (note moyenne). Le
-  back-office F-09 s'y branche ; le TTL n'est qu'un filet.
+  back-office F-09 s'y branche (`GestionJeux`, `GestionOffres`, `GestionEditeurs`,
+  `GestionPlateformes`, `GestionJaquettes`) : chaque écriture invalide la fiche, y compris sous son
+  ancienne adresse quand le slug change, puis les listes ; le TTL n'est qu'un filet.
 - **Pourquoi une version.** Supprimer « toutes les listes » demanderait un `SCAN` ou un index de
   clés. Une version dans la clé rend les anciennes listes inatteignables sans rien supprimer.
 - **Panne de Redis.** Le cache n'est qu'une optimisation de données publiques : en cas
@@ -175,3 +178,14 @@ retourné par l'API (`US-13`), jamais un calcul local.
 - **Ce qui n'est jamais mis en cache.** Les 404 (un client ne peut pas inonder Redis de clés) et
   toute valeur non validée : seuls un slug conforme, la langue de l'énumération et une empreinte
   entrent dans une clé.
+
+### 7.2 Back-office du catalogue : qui fait quoi (F-09)
+
+| Couche | Rôle dans F-09 | Fichiers |
+|---|---|---|
+| Présentation | Permission `gerer_catalogue` (+ A2F) sur chaque contrôleur ; DTO à liste blanche de champs ; fichier présent et de taille bornée avant lecture ; réponses jamais mises en cache | `Controller/Admin/{Jeux,Editeurs,Plateformes,Offres,Jaquettes}AdminController`, `Dto/Request/`, `Dto/Response/CatalogueAdminResponse` |
+| Métier | Revalidation (`SaisieJeu`, prix, seuil), validation d'une image par son contenu, slug dérivé du titre et numéroté, **audit** et **invalidation du cache** après chaque écriture ; ne voit jamais la requête HTTP | `Service/Catalogue/Gestion/Gestion*`, `ValidationJaquette`, `Slugueur` |
+| Données | SQL paramétré, écritures tout ou rien, **verrou optimiste dans l'UPDATE**, doublons et clés étrangères traduits en exceptions métier ; aucune autorisation | `Repository/{Jeux,Offres}AdminRepository`, `EditeursRepository`, `PlateformesRepository`, `OffresLecture` |
+| Infrastructure | Fichiers de jaquettes : nom régénéré, écriture atomique, suppression limitée à ses propres fichiers | `Infrastructure/Media/StockageJaquettesFichiers` |
+
+Les interfaces (`JeuxAdmin`, `OffresAdmin`, `EditeursAdmin`, `PlateformesAdmin`, `StockageJaquettes`) sont déclarées côté métier et implémentées côté données : les services se testent avec des doublures, les dépôts contre PostgreSQL. Les jaquettes sont servies par Nginx sous `/media/` (image statique, `nosniff`, CSP restrictive), jamais par PHP.

@@ -209,6 +209,8 @@ Diagrammes : [cas d'utilisation global](../uml/exports/uc-global.svg), [front-of
 
 - ✅ **Réalisés dans le front** : **E02** catalogue (`/catalogue`) et **E03** fiche jeu (`/jeux/:slug`), F-01, `front/src/features/catalogue/`. E02 : grille paginée par 20, filtres plateforme / genre / prix / PEGI / recherche / tri regroupés en `fieldset` + `legend`, **critères reflétés dans l'URL** (lien partageable, bouton « précédent »), nombre de résultats annoncé dans une région `aria-live`, message explicite si aucun résultat, pagination en vrais liens. E03 : jaquette, description FR / EN, éditeur, **PEGI écrit en texte**, offres par plateforme avec prix et **stock en toutes lettres** (« 12 clés disponibles »), note moyenne, ajout au panier (API F-05). FR et EN complets.
 
+- ✅ **Réalisé dans le front** : **E12** « Jeux et offres » (F-09), `front/src/features/admin/` ; routes `/admin/jeux`, `/admin/jeux/nouveau`, `/admin/jeux/:id`, `/admin/editeurs` et `/admin/plateformes`. La liste des jeux (inactifs compris) est un **tableau avec légende et en-têtes de colonnes**, recherche et statut reflétés dans l'URL, pagination en vrais liens. Le formulaire du jeu porte les descriptions **FR et EN**, les genres dans un `fieldset` + `legend`, et relie les erreurs de l'API (422) à leurs champs dans une alerte qui reçoit le focus. **Jaquette** : sélecteur limité au WebP, contraintes écrites dans l'aide du champ, refus immédiat d'un autre type ou d'un fichier trop lourd. **Offres** : tableau par plateforme, prix affiché sans calcul, et, si un collègue a enregistré avant, un **message de conflit explicite (409)** « Offre modifiée par un collègue » avec l'action proposée **« Recharger l'offre »**, la saisie en cours restant visible. La suppression et la désactivation se font **en deux temps** (question posée, focus déplacé sur « Confirmer », Échap annule) plutôt que par une boîte de dialogue du navigateur. Le lien « Administration » n'apparaît qu'avec la permission ; la garde du front **masque** l'interface sans rien autoriser (l'API répond 403). FR et EN complets.
+
 > ⏳ Insérer ici les captures des écrans clés (E02 catalogue, E03 fiche jeu, E07 paiement, E14 commandes à vérifier) exportées de Figma.
 
 ### 5.3 Exigences transverses ✅
@@ -334,7 +336,7 @@ Principe : **aucune donnée de référence dans Redis** ; sa perte coûte des pa
 
 **Réalisé (F-01)** :
 - **Cache du catalogue** (`RedisCatalogueCache`, interface `CatalogueCache`) : lecture directe (*cache-aside*), valeurs en **JSON** (jamais de `serialize()` PHP) avec TTL de 5 minutes. Une fiche = une clé par langue (`cache:jeu:{slug}:{langue}`). Une liste filtrée = `cache:jeux:v{n}:{langue}:{empreinte}` où `{empreinte}` est le SHA-256 des critères normalisés (ordre des cases, casse et espaces ignorés) : seules des valeurs validées (slug conforme, langue de l'énumération, empreinte) entrent dans une clé.
-- **Invalidation** : `invaliderJeu(slug)` supprime la fiche dans les deux langues ; `invaliderListes()` **incrémente** `cache:jeux:version` : toutes les listes et valeurs de filtres deviennent caduques en une opération O(1), les anciennes entrées expirant seules par TTL (aucun `SCAN` ni `DEL` en masse). Toute écriture du catalogue doit appeler les deux (le back-office F-09 s'y branchera) ; le TTL de 5 minutes n'est qu'un filet de sécurité. Documenté dans `architecture-couches.md` §7.
+- **Invalidation** : `invaliderJeu(slug)` supprime la fiche dans les deux langues ; `invaliderListes()` **incrémente** `cache:jeux:version` : toutes les listes et valeurs de filtres deviennent caduques en une opération O(1), les anciennes entrées expirant seules par TTL (aucun `SCAN` ni `DEL` en masse). Toute écriture du catalogue appelle les deux ; c'est le cas du back-office depuis F-09 (jeu, éditeur, plateforme, offre, jaquette, y compris l'**ancienne adresse** d'un jeu dont le slug change), prouvé par un test qui lit la fiche publique avant et après chaque écriture avec un vrai Redis ; le TTL de 5 minutes n'est qu'un filet de sécurité. Documenté dans `architecture-couches.md` §7.
 - **Disponibilité d'abord** : si Redis ne répond pas, les lectures renvoient « absent », les écritures sont ignorées et l'incident est journalisé ; le catalogue se lit alors directement en base. À l'inverse de l'authentification (qui refuse), le cache n'est qu'une optimisation de données publiques.
 - **Un 404 n'est jamais mis en cache**, et un slug mal formé ne touche ni la base ni Redis : un client ne peut pas inonder Redis de clés.
 - **Tests** : composant Redis contre un vrai serveur (clés, TTL réel, invalidation, entrée corrompue ou à objet sérialisé, Redis arrêté), API de bout en bout (la fiche reste celle du cache malgré une modification en base, puis se rafraîchit après invalidation).
@@ -447,6 +449,28 @@ Un test de sécurité de bout en bout importe des clés, en révèle une, provoq
 ### 7.5 Paiement simulé ✅
 
 Choix du binôme, justifié : la compétence évaluée porte sur la conception et l'accès aux données, pas sur l'intégration bancaire ; manipuler de vraies cartes imposerait la norme PCI DSS. Le patron **Strategy** permettra de brancher un vrai prestataire en v2 sans toucher au métier. Décision : [ADR-0008](../adr/0008-paiement-simule-et-anti-fraude.md).
+
+---
+
+### 7.6 Back-office du catalogue et téléversement d'images ✅ (F-09)
+
+Le back-office écrit dans les données que tous les visiteurs lisent : une faille ici se propage au site entier. Chaque menace a sa parade et son test.
+
+| Menace | Parade | Preuve |
+|---|---|---|
+| Accès sans droit (OWASP A01) | `#[IsGranted(gerer_catalogue)]` sur les cinq contrôleurs `Controller/Admin/` ; le voter exige en plus la revendication `a2f` ; refus génériques (401, 403) ; le front masque l'interface mais n'autorise rien | `CatalogueAdminSecuriteTest` : **19 routes** × visiteur (401), jeton forgé (401), client et modérateur (403), gestionnaire et admin sans second facteur (403), avec second facteur (accès accordé) |
+| Fichier hostile téléversé (A04, A08) | Le **type est lu dans le contenu**, jamais déduit du nom ni du `Content-Type` envoyés : WebP seul, 512 Kio au plus, signature `RIFF…WEBP`, longueur déclarée du conteneur égale à la longueur réelle, type et dimensions confirmés par `getimagesizefromstring` (100 à 4 000 px de côté), **nom régénéré** (16 octets aléatoires), écriture atomique, ancien fichier supprimé après la mise à jour de la base | 16 contenus hostiles refusés sans aucun fichier écrit (script PHP nommé `.php`, `.php.webp`, signature WebP suivie de code, WebP suivi d'un script, SVG avec script, HTML, PNG et JPEG renommés, tronqué, bombe de décompression) ; nom de traversée `../../public/index.php` sans effet |
+| Exécution d'un fichier téléversé | Nginx ne sert sous `/media/` que `jaquettes/<nom>.webp`, en image statique (`nosniff`, CSP `default-src 'none'; sandbox`) ; tout autre chemin répond 404 et PHP-FPM n'exécute que `index.php` | Requêtes réelles sur la pile Docker : `evil.php`, `.txt`, `../../index.php` et son encodage → 404 |
+| Affectation de masse | DTO à **liste blanche de champs** : un `id`, `jaquette`, `version`, `stock` ou `role` envoyé est ignoré | `testLesChampsNonListesSontIgnores` |
+| Injection SQL, XSS stocké (A03) | SQL paramétré, recherche à jokers échappés ; HTML refusé dans les titres et descriptions (422) ; identifiants refusés avant la base | `testLesInjectionsSqlSontInertes`, `testLeContenuHtmlEstRefuse…` ; la table `jeu` existe toujours |
+| Écrasement silencieux entre deux gestionnaires (BX-14) | **Verrouillage optimiste** des offres : `UPDATE … WHERE version = :attendue`, 409 avec la version actuelle | Deux modifications concurrentes : la seconde est refusée, le travail de la première est intact (SQL, API et écran) |
+| Suppression destructrice | Clés étrangères `RESTRICT` (409 « encore utilisé »), jeu **désactivé** et non supprimé, offres jamais supprimées : l'historique des commandes reste (RG-05) | `testSuppressionDEditeur…`, `testDesactivationEstUneSuppressionLogique` |
+| Fuite d'information dans les erreurs | Messages génériques traduits ; aucune valeur saisie, aucun nom de contrainte, aucun chemin | `testLesErreursNeRevelentNiSqlNiChemin` |
+| Action non imputable | Journal d'audit à chaque création, modification ou suppression (ressource et acteur, jamais le contenu) | `testLesEcrituresSontTraceesSansDonneeSensible` |
+
+**Moindre privilège** : le rôle applicatif `sk_app` recevait en lecture seule la table `plateforme` ; le CRUD des plateformes lui accorde `INSERT, UPDATE, DELETE` sur cette seule table (source `api/sql/roles/02_privileges.sql`, migration `Version20261126110000`, test de la matrice des droits). Le principe « `sk_app` sans DELETE sur les tables sensibles » (commandes, clés, journal d'audit) est inchangé : `plateforme` est une table de référence, comme `editeur` et `genre`.
+
+**Limites assumées** : sans extension de traitement d'image (GD, Imagick), l'image n'est **pas ré-encodée** : ses métadonnées éventuelles sont conservées, et le serveur ne **décode** jamais l'image (il lit l'en-tête), ce qui l'exclut du périmètre des failles de décodage de libwebp (§10). Pas d'analyse antivirus. Le code de plateforme est immuable après création.
 
 ---
 
@@ -869,12 +893,86 @@ private function portee(): TypeJeton
 }
 ```
 
+### 8.10 Back-office du catalogue : verrou optimiste et image validée par son contenu (F-09)
+
+**k) Refuser la seconde écriture sans rien lire avant : le verrou est dans l'UPDATE**
+
+`api/src/Repository/OffresAdminRepository.php` (couche données, extrait) — la version lue par l'écran est rendue à la modification. La condition `AND version = :attendue` et l'incrément se font dans **une seule instruction** : il n'existe aucune fenêtre entre « lire la version » et « écrire » où un collègue pourrait passer.
+
+```php
+$ligne = $this->connexion->fetchAssociative(
+    <<<'SQL'
+        UPDATE offre SET prix_ttc = CAST(:prix AS numeric), seuil_alerte = :seuil, actif = :actif,
+                         version = version + 1, modifie_le = now()
+         WHERE id = :id::uuid AND version = :attendue
+        RETURNING id::text
+        SQL,
+    ['prix' => $prix, 'seuil' => $seuilAlerte, 'actif' => $actif, 'id' => $offreId, 'attendue' => $versionAttendue],
+    ['seuil' => ParameterType::INTEGER, 'actif' => ParameterType::BOOLEAN, 'attendue' => ParameterType::INTEGER],
+);
+
+if (false === $ligne) {
+    // Aucune ligne modifiée : l'offre n'existe pas, ou sa version a changé (un collègue a écrit avant).
+    $actuelle = $this->connexion->fetchOne('SELECT version FROM offre WHERE id = :id::uuid', ['id' => $offreId]);
+
+    throw false === $actuelle ? CatalogueException::introuvable() : new ConflitOffreException((int) $actuelle);
+}
+```
+
+Pourquoi ici : un verrou pessimiste (`FOR UPDATE`) tiendrait une transaction ouverte pendant qu'un gestionnaire remplit un formulaire, parfois des minutes. Le verrou optimiste ne retient rien : il détecte le conflit au moment d'écrire et le **dit** (409 avec `versionActuelle`) au lieu d'écraser en silence. Le test d'intégration enchaîne les deux écritures avec la même version : la seconde est refusée et le prix du premier gestionnaire est intact.
+
+**l) Valider une image par ce qu'elle contient, pas par ce qu'elle prétend être**
+
+`api/src/Service/Catalogue/Gestion/ValidationJaquette.php` (couche métier, extrait) — ni le nom ni le `Content-Type` n'entrent en jeu ; chaque contrôle écarte une famille d'attaque.
+
+```php
+if ($taille > self::OCTETS_MAX) {
+    throw new JaquetteInvalideException(JaquetteInvalideException::TROP_LOURDE, ['%max%' => intdiv(self::OCTETS_MAX, 1024)]);
+}
+if ($taille < self::OCTETS_MIN || 'RIFF' !== substr($contenu, 0, 4) || 'WEBP' !== substr($contenu, 8, 4)) {
+    throw new JaquetteInvalideException(JaquetteInvalideException::TYPE);
+}
+$declaree = unpack('V', substr($contenu, 4, 4));
+if (false === $declaree || $declaree[1] + 8 !== $taille) {
+    throw new JaquetteInvalideException(JaquetteInvalideException::TYPE);   // tronqué ou suivi de données parasites
+}
+
+$infos = @getimagesizefromstring($contenu);
+if (false === $infos || 'image/webp' !== ($infos['mime'] ?? null)) {
+    throw new JaquetteInvalideException(JaquetteInvalideException::TYPE);
+}
+[$largeur, $hauteur] = $infos;
+foreach ([$largeur, $hauteur] as $cote) {
+    if ($cote < self::COTE_MIN || $cote > self::COTE_MAX) {
+        throw new JaquetteInvalideException(JaquetteInvalideException::DIMENSIONS, ['%min%' => self::COTE_MIN, '%max%' => self::COTE_MAX]);
+    }
+}
+```
+
+La **longueur déclarée** du conteneur RIFF est comparée à la longueur réelle : sans ce contrôle, `getimagesizefromstring` accepterait un WebP valide **suivi** d'un script (il ne lit que l'en-tête). Les dimensions sont bornées pour écarter les bombes de décompression. Le service qui l'appelle (`GestionJaquettes`) valide **avant** d'écrire, écrit le fichier sous un nom régénéré, met la base à jour, et retire le fichier neuf si la base échoue : aucun fichier orphelin, aucun fichier écrit pour une image refusée.
+
+**m) À l'écran : annoncer le conflit, garder la saisie, proposer l'action**
+
+`front/src/features/admin/OffersManager.tsx` (front, extrait) — un 409 portant `versionActuelle` n'est pas une erreur de champ : l'écran l'affiche dans une alerte, conserve ce que le gestionnaire vient de saisir et propose de recharger l'offre.
+
+```tsx
+} catch (error) {
+  if (isOfferConflict(error)) {
+    // Conflit de version : message explicite de l'API, saisie conservée pour être refaite après rechargement.
+    setConflict({ id: offer.id, message: error.body.message ?? t('admin.offers.conflictTitle') })
+  } else {
+    setFeedback(adminFeedback(error, t))
+  }
+}
+```
+
+Après « Recharger l'offre », l'écran relit le jeu (nouvelle version, nouveau prix du collègue) et la modification suivante part avec la bonne version : le test `CONFLIT : annonce explicitement…` joue tout ce parcours.
+
 ### 8.9 Extraits restant à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
 |---|---|---|
 | Panier et réservation dans Redis (TTL) | F-05 (livré, extrait à rédiger) | C8 |
-| Verrouillage optimiste et réponse 409 | F-09 | C8 |
 | Migration Doctrine créant les rôles SGBD | T-01 (livré, extrait à rédiger) | C7 |
 
 ---
@@ -895,10 +993,10 @@ private function portee(): TypeJeton
 
 | Partie | Tests | Résultat |
 |---|---|---|
-| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes ; **F-08** : AES-GCM (aller-retour, IV aléatoire, chiffré altéré octet par octet, tronqué, recopié sur une autre offre, autre clé maître), HMAC (forme canonique, dépend du secret), secrets invalides, normalisation et formats refusés (formules, injections, contrôles), import (rapport, doublons, BOM, point-virgule, lots de 500, plafond de 1 000, panne en cours), révélation, Voter de propriété ; **F-04** : vecteurs de la RFC 6238, codes de secours (format, unicité, normalisation), chiffrement du secret TOTP, service A2F (limitation, rejeu, usage unique, secret illisible), portée du jeton par route, revendication `a2f`, voter du back-office; **F-06** : passage de commande (montant relu, langue, minuteur, panier vidé, cache invalidé), compte non vérifié, panier vide ou modifié, PEGI 18 sans déclaration, offre désactivée, stock insuffisant tout ou rien, une commande en attente à la fois, Redis en panne après validation, commande d'autrui, annulation | 409 / 409 ✅ |
-| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) ; **F-08** : import multipart de bout en bout (rapport, compteurs en base, suffixes, journal, réimport, rôles, offre inconnue ou retirée, fichier absent, trop gros, mauvaise extension, 1 001 lignes, message EN), révélation (acheteur, journal à chaque affichage, IP hachée, clé d'autrui = 404, commande à vérifier ou remboursée = 409, back-office = 403, chiffré altéré = 500 générique) ; **F-04** : dépôt SQL de l'A2F (secret binaire, activation tout ou rien, code consommé une fois), `RedisUsageUniqueTotp`, parcours HTTP d'enrôlement et de connexion en deux étapes; **F-06** : parcours HTTP panier → commande (clés réservées, historique avec auteur, minuteur Redis de 15 min, panier vidé), prix imposé par le client ignoré, consultation et historique, clés d'une commande payée sans leur valeur, une commande en attente à la fois, annulation et remise en stock, expiration par la tâche planifiée, panier modifié, PEGI 18, compte non vérifié, panier vide, commande d'autrui = 404 identique, back-office et visiteur refusés ; **concurrence réelle** sur la dernière clé (8 processus) et entrelacement déterministe de deux transactions | 271 / 271 ✅ |
-| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie ; **F-08** : aucune clé en clair dans la base, les journaux ni les réponses (4 variantes d'écriture, hexadécimal compris), chiffré versionné avec IV et étiquette, empreinte HMAC et non simple SHA-256 ; **F-04** : back-office fermé sans second facteur (toutes les permissions et la route F-08), jeton intermédiaire (portée, durée, usage unique), force brute, rejeu, secrets absents de la base, des réponses, de l'audit et des logs, entrées hostiles | 216 / 216 ✅ |
-| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions ; **F-01** : sérialisation des filtres et de l’URL (assainissement), E02 (grille, filtres en fieldset, aria-live, pagination, jaquettes en différé, HTML non interprété), E03 (offres, stock en texte, ajout au panier, 404) ; **F-04** : seconde étape (code, secours, 429, jeton expiré), enrôlement (QR code, clé, codes de secours montrés une fois, session ouverte après lecture), aucun stockage du jeton, du secret ni des codes | 154 / 154 ✅ |
+| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes ; **F-08** : AES-GCM (aller-retour, IV aléatoire, chiffré altéré octet par octet, tronqué, recopié sur une autre offre, autre clé maître), HMAC (forme canonique, dépend du secret), secrets invalides, normalisation et formats refusés (formules, injections, contrôles), import (rapport, doublons, BOM, point-virgule, lots de 500, plafond de 1 000, panne en cours), révélation, Voter de propriété ; **F-04** : vecteurs de la RFC 6238, codes de secours (format, unicité, normalisation), chiffrement du secret TOTP, service A2F (limitation, rejeu, usage unique, secret illisible), portée du jeton par route, revendication `a2f`, voter du back-office; **F-06** : passage de commande (montant relu, langue, minuteur, panier vidé, cache invalidé), compte non vérifié, panier vide ou modifié, PEGI 18 sans déclaration, offre désactivée, stock insuffisant tout ou rien, une commande en attente à la fois, Redis en panne après validation, commande d'autrui, annulation; **F-09** : validation d'une image par son contenu (16 contenus hostiles, dimensions), saisie d'un jeu (titre, slug, date, PEGI, descriptions de 10 à 4 000 caractères sans HTML, genres), services de gestion avec doublures (revalidation, audit, **invalidation du cache** à chaque écriture, aucune trace ni invalidation quand l'écriture échoue, fichier orphelin retiré), stockage des fichiers (nom régénéré, suppression limitée à ses propres fichiers), erreurs par champ du gestionnaire d'exceptions | 489 / 489 ✅ |
+| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) ; **F-08** : import multipart de bout en bout (rapport, compteurs en base, suffixes, journal, réimport, rôles, offre inconnue ou retirée, fichier absent, trop gros, mauvaise extension, 1 001 lignes, message EN), révélation (acheteur, journal à chaque affichage, IP hachée, clé d'autrui = 404, commande à vérifier ou remboursée = 409, back-office = 403, chiffré altéré = 500 générique) ; **F-04** : dépôt SQL de l'A2F (secret binaire, activation tout ou rien, code consommé une fois), `RedisUsageUniqueTotp`, parcours HTTP d'enrôlement et de connexion en deux étapes; **F-06** : parcours HTTP panier → commande (clés réservées, historique avec auteur, minuteur Redis de 15 min, panier vidé), prix imposé par le client ignoré, consultation et historique, clés d'une commande payée sans leur valeur, une commande en attente à la fois, annulation et remise en stock, expiration par la tâche planifiée, panier modifié, PEGI 18, compte non vérifié, panier vide, commande d'autrui = 404 identique, back-office et visiteur refusés ; **concurrence réelle** sur la dernière clé (8 processus) et entrelacement déterministe de deux transactions; **F-09** : dépôts du back-office contre PostgreSQL avec le rôle `sk_app` (CRUD, écriture tout ou rien, slug numéroté, suppression logique, recherche sans accent, jokers, **verrou optimiste**, clés étrangères et contraintes), parcours HTTP complet avec Redis réel (**le cache public est invalidé par chaque écriture**, compteur de version des listes, journal d'audit, traduction FR / EN, pagination, validation par champ) | 311 / 311 ✅ |
+| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie ; **F-08** : aucune clé en clair dans la base, les journaux ni les réponses (4 variantes d'écriture, hexadécimal compris), chiffré versionné avec IV et étiquette, empreinte HMAC et non simple SHA-256 ; **F-04** : back-office fermé sans second facteur (toutes les permissions et la route F-08), jeton intermédiaire (portée, durée, usage unique), force brute, rejeu, secrets absents de la base, des réponses, de l'audit et des logs, entrées hostiles; **F-09** : matrice d'accès des **19 routes** du back-office (visiteur 401, jeton forgé 401, client et modérateur 403, sans second facteur 403, avec second facteur accordé), **16 fichiers hostiles** refusés sans écriture, nom et type envoyés ignorés, affectation de masse, injections SQL, XSS stocké, aucune fuite dans les erreurs | 332 / 332 ✅ |
+| Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions ; **F-01** : sérialisation des filtres et de l’URL (assainissement), E02 (grille, filtres en fieldset, aria-live, pagination, jaquettes en différé, HTML non interprété), E03 (offres, stock en texte, ajout au panier, 404) ; **F-04** : seconde étape (code, secours, 429, jeton expiré), enrôlement (QR code, clé, codes de secours montrés une fois, session ouverte après lecture), aucun stockage du jeton, du secret ni des codes; **F-09** : garde d'accès (aucune requête d'administration pour un client), éditeurs et plateformes (tableaux, confirmation en deux temps, code immuable), liste des jeux (URL, pagination, désactivation), formulaire (validation, erreurs 422 par champ, 409), jaquette (refus côté navigateur, envoi multipart), offres (**conflit 409 puis rechargement**), appels de l'API et mapping des erreurs | 218 / 218 ✅ |
 | CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml`, tests SQL ; clés JWT jetables générées par la CI | Verte sur chaque PR |
 
 **Sécurité des tests** : les jetons falsifiés sont fabriqués par un utilitaire indépendant de Lexik (`tests/Support/Auth/JwtForge.php`) qui joue l'attaquant ; chaque attaque a son **témoin** (le même jeton, régulier, est accepté) pour que les refus prouvent quelque chose. Les routes du back-office n'existant pas encore, une **sonde RBAC** (chargée en environnement de test uniquement) expose une route par permission et suit le chemin d'une vraie route.
@@ -958,6 +1056,9 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | 07/11/2026 | GitHub Security Advisories, `spomky-labs/otphp` : [GHSA-526c-px8p-72x8](https://github.com/Spomky-Labs/otphp/security/advisories/GHSA-526c-px8p-72x8) et quatre avis voisins (moyen) | Paramètres d'un URI de provisionnement non bornés (compteur, chiffres, période, étiquette) provoquant des erreurs non rattrapées ; versions < 11.4.4 ou 11.5.0 | Bibliothèque TOTP de F-04. Installée en **11.5.1**, hors des plages touchées. SideKey ne **lit** jamais un URI : il le fabrique côté serveur à partir d'un secret qu'il a tiré lui-même | Aucune ; version minimale `^11.5` en `composer.json` |
 | 05/2011 – 2026 | IETF, [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238) (TOTP) et [RFC 4226](https://www.rfc-editor.org/rfc/rfc4226) (HOTP) | Un code ne doit être accepté qu'une fois dans sa fenêtre ; secret d'au moins 128 bits, 160 recommandés ; tolérance d'horloge limitée ; limitation des essais | Le TOTP est la seconde étape de F-04 | Pas réutilisable (`a2f:used`), secret de 160 bits, ±1 pas, 5 essais par 15 min ; les six vecteurs de test de la RFC 6238 sont dans les tests unitaires |
 | 25/11/2026 | Observation sur le projet (test de F-04) | La taille de secret par défaut d'`otphp` est de 1024 bits (103 caractères), illisible à saisir à la main et refusée par certaines applications | Un défaut de bibliothèque qui dégrade l'usage sans qu'aucun avis ne le signale | Taille fixée à 160 bits, test sur le format (32 caractères base32) |
+| 09/2023 | NVD, [CVE-2023-4863](https://nvd.nist.gov/vuln/detail/CVE-2023-4863) (critique, exploitée) — à vérifier par chaque candidat | Débordement de tampon dans `libwebp` au décodage d'une image WebP forgée ; navigateurs et applications qui embarquent la bibliothèque | SideKey accepte des jaquettes **WebP** téléversées par le back-office. Le **serveur ne décode jamais** l'image (aucune extension GD ni Imagick : seul l'en-tête est lu) ; les visiteurs la décodent dans leur navigateur, à tenir à jour | Validation de l'en-tête et de la longueur sans décodage, WebP seul, accès réservé aux gestionnaires avec A2F, service en image statique avec `nosniff` et CSP restrictive ; limite documentée au §7.6 |
+| — | OWASP, [File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) — à vérifier par chaque candidat | Valider le contenu et pas seulement l'extension ou le `Content-Type`, régénérer le nom, limiter la taille, stocker hors de portée d'exécution, servir avec des en-têtes sûrs | Référence du critère « téléversement sécurisé » de F-09 | Toutes ces mesures sont appliquées et testées (§7.6, §8.10) |
+| 26/11/2026 | Observation sur le projet (tests de F-09) | `getimagesizefromstring` ne lit que l'en-tête : un WebP valide **suivi** d'un script PHP passe ce seul contrôle | Un test d'en-tête isolé laisse passer un fichier « polyglotte » | Longueur déclarée du conteneur RIFF comparée à la longueur réelle ; cas « WebP suivi d'un script » dans les tests unitaires et de sécurité ; Nginx n'exécute rien sous `/media/` |
 
 ---
 
@@ -1000,6 +1101,7 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Commande et concurrence | `POST /api/commandes` (panier → commande en une transaction READ COMMITTED, prix et montant relus en base, PEGI 18, compte vérifié, une commande en attente à la fois), consultation, historique, annulation par `fn_annuler_commande` ; preuve par 8 achats simultanés de la dernière clé (F-06) | `api/src/Service/Commande/`, `api/src/Repository/CommandeRepository.php`, `api/sql/functions/002_annulation.sql`, `api/tests/Integration/Concurrence/` |
 | Catalogue et cache Redis | `GET /api/jeux` (pagination à 20, recherche sans accent ni casse, filtres plateforme / genre / prix / PEGI, tris en liste blanche), fiche et valeurs des filtres, SQL paramétré, cache Redis à invalidation par version, repli sur PostgreSQL ; écrans E02 et E03 FR / EN, critères dans l'URL, jaquettes en différé (F-01) | `api/src/Service/Catalogue/`, `api/src/Repository/CatalogueRepository.php`, `api/src/Infrastructure/Redis/RedisCatalogueCache.php`, `front/src/features/catalogue/` |
 | A2F TOTP du back-office | Connexion en deux étapes (jeton intermédiaire à portée limitée et à usage unique), enrôlement par QR code, 10 codes de secours hachés à usage unique, secret TOTP chiffré AES-256-GCM, 5 tentatives par 15 min, code non rejouable, **back-office fermé sans second facteur** (revendication `a2f` exigée par le voter) ; écran E05 : code, enrôlement, codes de secours (F-04) | `api/src/Service/A2f/`, `api/src/Controller/Api/A2fController.php`, `api/src/Security/Voter/RbacVoter.php`, `front/src/features/auth/SecondFactorStep.tsx`, `api/tests/Security/A2fSecuriteTest.php` |
+| Back-office du catalogue | CRUD des jeux (descriptions FR et EN, genres, suppression logique), des éditeurs et des plateformes (code immuable) ; offres jeu × plateforme avec **verrouillage optimiste** (409 « modifiée par un collègue », rechargement) ; **jaquette WebP téléversée en sécurité** (type lu dans le contenu, 512 Kio, dimensions bornées, nom régénéré, servie par Nginx en image statique) ; accès `gerer_catalogue` et A2F ; invalidation du cache Redis à chaque écriture ; journal d'audit ; écran E12 FR / EN (F-09) | `api/src/Service/Catalogue/Gestion/`, `api/src/Repository/`, `api/src/Controller/Admin/`, `front/src/features/admin/`, `api/tests/Security/CatalogueAdminSecuriteTest.php` |
 
 ### 13.2 Pas encore fait
 
@@ -1009,18 +1111,19 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | Paiement, back-office (dont l'écran E13 d'import des clés et l'affichage masqué) ; branchement de l'invalidation du cache catalogue sur les écritures (`invaliderJeu`, `invaliderListes`) | F-04, F-06 à F-10 |
+| Features | Paiement simulé et anti-fraude (F-07), back-office des commandes et journal d'audit (dont l'écran E13 d'import des clés et l'affichage masqué) | F-07, F-10 |
 | Dossier | Comptes rendus quotidiens, veille personnelle (§10, premières entrées faites), recherche anglophone (§11), extraits métier restants (§8.7), cas k6 et paiement après expiration du jeu d'essai de l'achat concurrent (§9.3.2), écrans du tunnel E04, E06 à E08, captures (dont E02, E03 et E05), bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 
 ### 13.3 Points de vigilance
 
-- **Planning** : le panier (F-05), l'authentification (F-03) et le catalogue (F-01) sont livrés ; le catalogue (F-01) et l'A2F (F-04) sont livrés ; le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
-- **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-01, F-03 et F-04.
+- **Planning** : le panier (F-05), l'authentification (F-03), le catalogue (F-01), l'A2F (F-04), l'import des clés (F-08), la commande transactionnelle (F-06) et le back-office du catalogue (F-09) sont livrés ; le paiement simulé (F-07) et le back-office des commandes (F-10) restent à faire, c'est la priorité absolue pour la suite.
+- **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-01, F-03, F-04 et F-09.
 - **Comptes du jeu d'essai et A2F** : les deux comptes à A2F du jeu d'essai (admin et un client) ont un faux secret TOTP, illisible : leur code est refusé (401, pas de 500) ; pour la démonstration, créer un compte du back-office et l'enrôler. Le jeu d'essai ne contient aucun compte du back-office utilisable sans enrôlement préalable.
 - **Proxy et adresse du client** : la limitation de débit s'appuie sur `Request::getClientIp()` ; derrière un reverse proxy (Caddy en recette), `trusted_proxies` devra être configuré par T-04, faute de quoi toutes les requêtes partageraient l'adresse du proxy.
 - **Commande (F-06)** : choix du binôme, un client n'a **qu'une commande en attente de paiement à la fois** (le CDC ne le dit pas ; cela empêche un double clic de réserver deux fois le même panier). Le paiement (F-07) devra appeler `fn_valider_commande`, arrêter le minuteur et invalider le cache du catalogue ; les écrans du tunnel (E04, E06 à E08) restent à faire.
 - **Clés de licence (F-08)** : la route d'import `/api/admin/**` est réservée au rôle **et**, depuis F-04, à une session qui a passé le second facteur (403 sinon) ; les clés du jeu d'essai ont un faux chiffré et ne se révèlent pas (erreur 500 générique), il faut importer des clés pour la démonstration ; les secrets `LICENSE_KEY_*` et `TOTP_ENC_KEY` (F-04) devront être ajoutés aux environnements GitHub de T-04.
+- **Jaquettes (F-09)** : elles sont écrites sur le disque du conteneur dans `api/public/media/jaquettes/` (dossier ignoré par Git). T-04 devra monter un **volume persistant** (ou un stockage objet) partagé par l'API et Nginx, faute de quoi les images disparaîtraient à chaque déploiement. Les images ne sont pas ré-encodées (pas de GD) ; le jeu d'essai référence des fichiers `jaquettes/jeu-NN.webp` qui n'existent pas, le front affiche alors un bloc de remplacement. La migration `Version20261126110000` (écriture sur `plateforme` pour `sk_app`) doit être jouée en recette.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
 - **Dossier individuel** : les §4.3, §10, §11 et §12 doivent être personnalisés par chaque candidat.
 - **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle est devenue vraie avec la fusion de la PR #41.
