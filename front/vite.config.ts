@@ -13,6 +13,11 @@ export default defineConfig({
         target: process.env.API_PROXY_TARGET ?? 'http://localhost:8000',
         changeOrigin: true,
       },
+      // Jaquettes téléversées par le back-office (F-09) : servies par Nginx, relayées sur la même origine.
+      '/media': {
+        target: process.env.API_PROXY_TARGET ?? 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
   test: {
