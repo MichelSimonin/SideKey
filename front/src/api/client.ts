@@ -172,7 +172,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const send = (): Promise<Response> => {
     const token = bearer ?? getAccessToken()
     const headers: Record<string, string> = apiHeaders()
-    if (body !== undefined) {
+    // FormData (téléversement) : le navigateur fixe lui-même le Content-Type multipart et sa frontière.
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+    if (body !== undefined && !isForm) {
       headers['Content-Type'] = 'application/json'
     }
     if (token !== null) {
@@ -181,7 +183,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     return fetchFn(apiUrl(path), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       credentials: 'same-origin',
       signal,
     })
