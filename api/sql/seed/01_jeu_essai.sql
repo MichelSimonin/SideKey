@@ -157,9 +157,9 @@ BEGIN
             IF statut_k IS NOT NULL THEN
                 FOR nb_cles IN 1..qte LOOP
                     seq := seq + 1;
-                    INSERT INTO cle_licence (cle_chiffree, empreinte, statut, importee_le, reservee_le, revelee_le, offre_id, ligne_commande_id, import_cles_id)
+                    INSERT INTO cle_licence (cle_chiffree, empreinte, suffixe, statut, importee_le, reservee_le, revelee_le, offre_id, ligne_commande_id, import_cles_id)
                     VALUES ('\xFA4E00'::bytea || sha256(convert_to('faux-chiffre-' || seq, 'UTF8')),
-                            sha256(convert_to('sidekey-essai-cle-' || seq, 'UTF8')), statut_k, now() - interval '30 days',
+                            sha256(convert_to('sidekey-essai-cle-' || seq, 'UTF8')), lpad(seq::text, 4, '0'), statut_k, now() - interval '30 days',
                             cree, CASE WHEN statut_k = 'VENDUE' THEN cree + interval '4 minutes' END,
                             offres[off_rank], ligne, imp);
                 END LOOP;
@@ -199,16 +199,16 @@ BEGIN
     -- ===== Clés disponibles : compléter jusqu'à 500 ====================================
     -- Offre 59 : exactement UNE clé (dernière clé) ; offre 60 : aucune (rupture) ; offres 1..58 : le reste, réparti.
     seq := seq + 1;
-    INSERT INTO cle_licence (cle_chiffree, empreinte, importee_le, offre_id, import_cles_id)
+    INSERT INTO cle_licence (cle_chiffree, empreinte, suffixe, importee_le, offre_id, import_cles_id)
     VALUES ('\xFA4E00'::bytea || sha256(convert_to('faux-chiffre-' || seq, 'UTF8')),
-            sha256(convert_to('sidekey-essai-cle-' || seq, 'UTF8')), now() - interval '29 days', offres[59], imp);
+            sha256(convert_to('sidekey-essai-cle-' || seq, 'UTF8')), lpad(seq::text, 4, '0'), now() - interval '29 days', offres[59], imp);
     SELECT count(*) INTO nb_cles FROM cle_licence;
     WHILE nb_cles < 500 LOOP
         seq := seq + 1;
         nb_cles := nb_cles + 1;
-        INSERT INTO cle_licence (cle_chiffree, empreinte, importee_le, offre_id, import_cles_id)
+        INSERT INTO cle_licence (cle_chiffree, empreinte, suffixe, importee_le, offre_id, import_cles_id)
         VALUES ('\xFA4E00'::bytea || sha256(convert_to('faux-chiffre-' || seq, 'UTF8')),
-                sha256(convert_to('sidekey-essai-cle-' || seq, 'UTF8')),
+                sha256(convert_to('sidekey-essai-cle-' || seq, 'UTF8')), lpad(seq::text, 4, '0'),
                 now() - interval '29 days' + (seq || ' minutes')::interval, offres[1 + (seq % 58)], imp);
     END LOOP;
 

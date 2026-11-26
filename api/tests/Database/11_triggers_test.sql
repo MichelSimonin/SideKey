@@ -60,6 +60,8 @@ BEGIN
     PERFORM pg_temp.rejette(format('UPDATE cle_licence SET offre_id = %L WHERE id = %L', pg_temp.mk_offre(), k), 'SK003', 'clé vendue : changement d''offre refusé');
     PERFORM pg_temp.rejette(format('UPDATE cle_licence SET ligne_commande_id = NULL, statut = %L WHERE id = %L', 'RESERVEE', k), 'SK003', 'clé vendue : détachement de la commande refusé');
     PERFORM pg_temp.rejette(format('DELETE FROM cle_licence WHERE id = %L', k), 'SK003', 'clé vendue : suppression refusée, même par le propriétaire');
+    PERFORM pg_temp.rejette(format('UPDATE cle_licence SET suffixe = %L WHERE id = %L', 'ZZZZ', k), 'SK003', 'clé vendue : suffixe non modifiable (F-08)');
+    PERFORM pg_temp.rejette(format('UPDATE cle_licence SET revelee_le = now(), suffixe = %L WHERE id = %L', 'ZZZZ', k), 'SK003', 'clé vendue : suffixe non modifiable, même avec la première révélation (F-08)');
     UPDATE cle_licence SET revelee_le = now(), modifie_le = now() WHERE id = k;
     PERFORM pg_temp.ok((SELECT revelee_le IS NOT NULL FROM cle_licence WHERE id = k), 'clé vendue : première révélation acceptée');
     PERFORM pg_temp.rejette(format('UPDATE cle_licence SET revelee_le = now() + interval ''1 hour'' WHERE id = %L', k), 'SK003', 'clé vendue : date de révélation non réécrite');

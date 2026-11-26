@@ -25,3 +25,12 @@ error:
     # Catalogue (F-01)
     jeu_introuvable: 'This game does not exist or is no longer in the catalogue.'
     page_introuvable: 'This results page does not exist.'
+    # Licence keys (F-08): never a key value in a message
+    cle_introuvable: "This key does not exist or does not belong to you."
+    cle_non_revelable: "This key will be available as soon as the order payment is confirmed."
+    import_fichier_absent: 'Attach a CSV file of keys (field "fichier").'
+    import_fichier_trop_gros: 'The file exceeds %maximum% KiB.'
+    import_fichier_type: 'Only .csv and .txt files are accepted.'
+    import_encodage: 'The file must be UTF-8 encoded.'
+    import_vide: 'The file contains no key.'
+    import_trop_de_lignes: "The file contains more than %maximum% keys: split it into several imports."

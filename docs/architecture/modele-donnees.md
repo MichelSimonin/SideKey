@@ -132,6 +132,7 @@ Lecture : `(min,max)` de l'entité **pour une occurrence de l'autre**.
 | `RG-03` unicité de l'empreinte | `cle_licence` | `UNIQUE (empreinte)`, en base et à l'import |
 | `RG-04` statut de clé | `cle_licence` | `CHECK statut IN ('DISPONIBLE','RESERVEE','VENDUE')` |
 | cohérence statut / ligne | `cle_licence` | une clé `VENDUE` a obligatoirement une `ligne_commande_id` |
+| suffixe affiché (F-08) | `cle_licence` | `suffixe` : `NULL` ou 4 caractères `[A-Z0-9]` (`ck_cle_suffixe`), non modifiable sur une clé vendue |
 | `RG-05` prix figé | `ligne_commande` | `prix_unitaire` recopié depuis `offre` à la création |
 | `RG-11` montant serveur | `commande` | `montant_total` recalculé, jamais reçu du client |
 | `RG-12` réservation | `commande` | `expire_le = cree_le + 15 min` (valeur posée par le service) |
@@ -290,8 +291,8 @@ Trois choix de modélisation méritent d'être explicites :
 | PLATEFORME | `plateforme` | `Plateforme` | `PlateformeRepository` | `GET /api/plateformes` |
 | GENRE | `genre` | `Genre` | `GenreRepository` | `GET /api/genres` |
 | OFFRE | `offre` | `Offre` | `OffreRepository` | `GET /api/jeux/{slug}/offres` |
-| CLE_LICENCE | `cle_licence` | `CleLicence` | `CleLicenceRepository` | `GET /api/commandes/{reference}/cles` |
-| IMPORT_CLES | `import_cles` | `ImportCles` | `ImportClesRepository` | `POST /api/admin/cles/import` |
+| CLE_LICENCE | `cle_licence` | `CleRevelable`, `CleAImporter` (projections DBAL) | `ClesLicenceRepository` | `POST /api/cles/{id}/revelation` |
+| IMPORT_CLES | `import_cles` | `RapportImport` | `ClesLicenceRepository` | `POST /api/admin/offres/{offreId}/cles` |
 | UTILISATEUR | `utilisateur` | `Utilisateur` | `UtilisateurRepository` | `GET /api/moi` |
 | UTILISATEUR_ROLE | `utilisateur_role` | `UtilisateurRole` (entité de jointure) | `UtilisateurRepository` | `POST /api/admin/utilisateurs` |
 | CODE_SECOURS | `code_secours` | `CodeSecours` | `CodeSecoursRepository` | `POST /api/2fa/secours` |
@@ -327,3 +328,9 @@ Aucun ne modifie la structure des tables : MCD, MLD et MPD restent valables.
 | 2 | `commande.langue_code` alors que `utilisateur.langue_code` existe | **Conservée** : c'est la langue au moment de la commande (e-mail de confirmation, preuve de la vente), qui ne doit pas changer si le client change de langue ensuite. Ce n'est pas une redondance : la valeur peut légitimement différer de celle du profil | F-06 : copiée de la langue de la requête à la création de la commande |
 | 3 | Purge du `journal_audit` | Durée de conservation fixée à **12 mois** (CDC §12.1 : 6 mois à 1 an, recommandation CNIL). **Purge automatisée en v2**, hors périmètre v1 | v2 : le trigger `trg_journal_audit_immuable` interdit aujourd'hui tout DELETE ; la purge devra être conçue avec lui (par exemple partitionnement mensuel et suppression des partitions anciennes par `sk_owner`). `sk_app` reste sans droit DELETE |
 | 4 | `code_secours` | **10 codes générés en bloc à chaque activation de l'A2F** ; les anciens codes de l'utilisateur sont supprimés dans la même transaction. Usage unique, stockés hachés | F-04 |
+
+### 7.1 Décision complémentaire (26/11/2026)
+
+| # | Point | Décision | Mise en œuvre |
+|---|---|---|---|
+| 5 | Affichage des 4 derniers caractères d'une clé au back-office (ADR-0004, point non tranché) | **Colonne `cle_licence.suffixe` en clair** (`char(4)`), calculée à l'import. C'est la seule évolution de structure depuis T-01 | F-08 : `api/sql/schema/004_cle_suffixe.sql` et `api/sql/triggers/002_cle_suffixe.sql` (protection des clés vendues étendue au suffixe), migrations `Version20261126090000` et `Version20261126090100` |

@@ -45,7 +45,7 @@
 | **C5** — Analyser les besoins et maquetter une application | 7 personas, besoins BX-01 à BX-24, user stories MoSCoW, maquettes Figma FR (EN en cours), schéma d'enchaînement, exigences RGAA, RGPD et éco-conception | §3, §5 | 🟡 |
 | **C6** — Définir l'architecture logicielle d'une application multicouche répartie | Architecture SPA ↔ API REST en couches ↔ PostgreSQL + Redis, matrice de justification de la stack, 8 ADR, diagrammes de composants et de déploiement, DICP, patrons de conception et de sécurité | §6, §7 | ✅ conception · ⏳ implémentation |
 | **C7** — Concevoir et mettre en place une base de données relationnelle | MCD (20 entités), MLD (21 tables), MPD PostgreSQL 17 ; rôles SGBD, jeu d'essai, sauvegarde et restauration | §6.4, §8.5 | ✅ conception · ✅ schéma, rôles, jeu d'essai (T-01) · ✅ PL/pgSQL (T-02) |
-| **C8** — Développer des composants d'accès aux données SQL et NoSQL | Repositories Doctrine, PL/pgSQL défensif, `FOR UPDATE SKIP LOCKED`, verrouillage optimiste, Redis (panier, réservations, jetons, limitation de débit) | §6.6, §6.7, §8 | 🟡 PL/pgSQL et `SKIP LOCKED` faits (T-02) · ⏳ repositories, Redis |
+| **C8** — Développer des composants d'accès aux données SQL et NoSQL | Repositories Doctrine, PL/pgSQL défensif, `FOR UPDATE SKIP LOCKED`, verrouillage optimiste, Redis (panier, réservations, jetons, limitation de débit) | §6.6, §6.7, §7.4, §8 | 🟡 PL/pgSQL et `SKIP LOCKED` (T-02), Redis (F-05, F-03, F-01), repositories DBAL dont le chiffrement des clés (F-08) · ⏳ verrouillage optimiste (F-09) |
 | **AT3 (partie DevOps)** — Préparer et automatiser le déploiement | Environnement Docker de développement, CI GitHub Actions bloquante, protection de `main`, CD vers une recette dans l'UE | §4.4, §8.1 | 🟡 CI faite · ⏳ CD (T-04) |
 
 ---
@@ -167,7 +167,10 @@ Règles d'attribution du pool : le premier membre libre prend la feature la mieu
 | #43 | Internationalisation FR / EN : react-i18next, sélecteur, `lang`, erreurs de l'API traduites selon `Accept-Language` | F-02 (#7, fermée) |
 | #44 | Schéma PostgreSQL, contraintes, comptes SGBD, jeu d'essai, sauvegarde et restauration | T-01 (#5, fermée) |
 | #45 | Fonctions et triggers PL/pgSQL défensifs, test de concurrence sur la dernière clé | T-02 (#8, fermée) |
-| (en cours) | Panier Redis (TTL glissant), minuteur de réservation, libération planifiée, Doctrine | F-05 (#11) |
+| #46 | Panier Redis (TTL glissant), minuteur de réservation, libération planifiée, Doctrine | F-05 (#11, fermée) |
+| #47 | Authentification JWT, jeton de rafraîchissement rotatif et RBAC | F-03 (#9, fermée) |
+| #48 | Catalogue, recherche, filtres et cache Redis | F-01 (#12, fermée) |
+| (en cours) | Clés de licence : import CSV, chiffrement AES-256-GCM, empreinte HMAC, révélation journalisée | F-08 (#13) |
 
 > ⏳ Les comptes rendus quotidiens (`docs/cr/AAAA-MM-JJ.md`) prévus au CDC §16.1 ne sont pas encore tenus : à démarrer pour alimenter ce paragraphe.
 
@@ -397,9 +400,24 @@ Patrons de sécurité retenus (Authenticator, Authorization Enforcer, Input Vali
 - **Décisions de mise en œuvre** (une ligne chacune) : inscription avec e-mail déjà pris → 409, avec limitation par adresse (`rl:register:{ip}`) ; consentement exigé par le DTO mais non stocké (le schéma T-01 n'a pas de colonne dédiée) ; e-mail non vérifié à la création (l'envoi relève du ticket des e-mails) ; seul `a2f_active` déclenche la seconde étape dans F-03.
 - Diagramme : [séquence de connexion JWT](../uml/exports/seq-connexion-jwt.svg) · décision : [ADR-0003](../adr/0003-jwt-et-jeton-de-rafraichissement.md) (§ « Mise en œuvre »).
 
-### 7.4 Protection des clés de licence ✅ conception · ⏳ implémentation (F-08)
+### 7.4 Protection des clés de licence ✅ conception · ✅ implémentation (F-08)
 
 Chiffrement **AES-256-GCM** avec IV aléatoire, clé maître dans un secret d'environnement ; unicité vérifiée par une **empreinte HMAC-SHA256** (le chiffré ne le permet pas, puisqu'il change à chaque chiffrement) ; déchiffrement uniquement pour le propriétaire d'une commande payée, et journalisé. Décision : [ADR-0004](../adr/0004-chiffrement-des-cles-de-licence.md) · séquence : [révélation d'une clé](../uml/exports/seq-revelation-cle.svg).
+
+**Mise en œuvre (F-08).**
+
+| Mesure | Où |
+|---|---|
+| Chiffré « version, IV, étiquette GCM, chiffré », lié à son offre (données associées) : altéré, tronqué ou recopié sur une autre offre, il est refusé | `Infrastructure/Crypto/ChiffreurClesAesGcm` |
+| Deux secrets distincts de 32 octets (`LICENSE_KEY_ENC_KEY`, `LICENSE_KEY_HMAC_KEY`), vérifiés au démarrage du service | `config/services.yaml`, environnements GitHub |
+| Empreinte HMAC de la forme canonique (majuscules, sans tirets) : « abcde-12345 » et « ABCDE12345 » sont un doublon | `Service/Cles/CleNormalisee` |
+| Import CSV de 1 000 clés au plus, par lots de 500, doublons du fichier et du stock rejetés ligne à ligne, rapport sans aucune valeur de clé | `Service/Cles/ImportClesService`, `POST /api/admin/offres/{offreId}/cles` |
+| Seuls les 4 derniers caractères sont gardés en clair (colonne `suffixe`), pour l'affichage masqué du back-office : choix du binôme | `api/sql/schema/004_cle_suffixe.sql` |
+| Révélation : la requête SQL ne lit que les clés de l'utilisateur, puis le Voter exige CLIENT, commande `PAYEE` et clé `VENDUE`. Une clé d'autrui répond comme une clé inexistante (404) | `Service/Cles/LicenceService`, `Security/Voter/CleLicenceVoter` |
+| Chaque affichage journalisé (`REVELATION_CLE`), adresse IP hachée ; réponse `Cache-Control: no-store` | `Repository/JournalAuditRepository`, `POST /api/cles/{id}/revelation` |
+| Aucune clé dans les traces : paramètres `#[\SensitiveParameter]`, objets sans valeur dans `var_dump` | `Service/Cles/*` |
+
+Un test de sécurité de bout en bout importe des clés, en révèle une, provoque une erreur de déchiffrement, puis cherche chaque clé (telle quelle, sans tirets, en minuscules, en hexadécimal) dans la base, les journaux de l'application et les réponses de l'API : elle ne doit apparaître que dans la réponse de révélation, pour son acheteur.
 
 ### 7.5 Paiement simulé ✅
 
@@ -720,11 +738,50 @@ public function liste(Request $requete, #[MapQueryString(validationFailedStatusC
 }
 ```
 
-### 8.7 Extraits restant à ajouter ⏳
+### 8.7 Clés de licence : chiffrer, prendre l'empreinte, ne jamais déchiffrer ailleurs (F-08)
+
+`api/src/Infrastructure/Crypto/ChiffreurClesAesGcm.php` — AES-256-GCM avec un IV aléatoire par clé ; l'offre entre dans les données authentifiées, si bien qu'un chiffré déplacé en base devient illisible.
+
+```php
+public function chiffrer(CleNormalisee $cle, string $offreId): string
+{
+    $iv = random_bytes(self::LONGUEUR_IV);
+    $etiquette = '';
+    $chiffre = openssl_encrypt(
+        $cle->valeur, self::ALGORITHME, $this->cleChiffrement, \OPENSSL_RAW_DATA, $iv, $etiquette,
+        self::donneesAssociees($offreId), self::LONGUEUR_ETIQUETTE,
+    );
+    // ...
+    return self::VERSION.$iv.$etiquette.$chiffre;
+}
+
+public function empreinte(CleNormalisee $cle): string
+{
+    return hash_hmac('sha256', $cle->canonique, $this->cleEmpreinte, true);
+}
+```
+
+`api/src/Service/Cles/LicenceService.php` — le seul endroit qui déchiffre. L'ordre compte : propriétaire (dans la requête SQL), puis Voter, puis déchiffrement authentifié, puis journal.
+
+```php
+$cle = $this->cles->cleDuProprietaire($cleId, $utilisateurId);
+if (null === $cle) {
+    throw new CleIntrouvableException();      // 404, comme une clé qui n'existe pas
+}
+if (!$this->autorisations->isGranted(CleLicenceVoter::REVELER, $cle)) {
+    throw new CleNonRevelableException();     // 409 : commande pas payée ou en vérification
+}
+$valeur = $this->chiffrement->dechiffrer($cle->chiffre, $cle->offreId);
+$reveleeLe = $this->cles->marquerRevelee($cle->id);
+$this->journal->tracer(JournalAudit::REVELATION_CLE, 'cle_licence', $cle->id, $utilisateurId, $adresseIp);
+```
+
+Les doublons entre deux imports simultanés sont tranchés par la base : `INSERT … ON CONFLICT (empreinte) DO NOTHING RETURNING …` renvoie les lignes réellement insérées, les autres sont comptées comme doublons sans annuler le lot.
+
+### 8.8 Extraits restant à ajouter ⏳
 
 | Extrait prévu | Feature | Compétence |
 |---|---|---|
-| Service de chiffrement AES-GCM + empreinte HMAC | F-08 | C8 |
 | Voter de propriété d'une commande (anti-IDOR) | F-06 | C6 |
 | Panier et réservation dans Redis (TTL) | F-05 (livré, extrait à rédiger) | C8 |
 | Verrouillage optimiste et réponse 409 | F-09 | C8 |
@@ -748,9 +805,9 @@ public function liste(Request $requete, #[MapQueryString(validationFailedStatusC
 
 | Partie | Tests | Résultat |
 |---|---|---|
-| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes | 227 / 227 ✅ |
-| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) | 192 / 192 ✅ |
-| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie | 177 / 177 ✅ |
+| API : unitaires (`tests/Unit`) | Sonde de santé, gestionnaire d'erreurs, panier, libération des réservations ; **F-03** : politique de mot de passe (12 à 128, accents, emojis, mots triviaux, identité), service de connexion (anti-énumération, limitation, A2F, migration bcrypt → argon2id), service de session (rotation, réutilisation, famille, déconnexion), inscription, **matrice RBAC** (4 rôles × 7 permissions), CSRF (origines hostiles, double soumission naïve, cookies), abonné JWT (portée, révocation, Redis indisponible), fournisseur d'utilisateurs, DTO de sortie sans secret, **F-01** : service du catalogue (cache-aside, 404 jamais mis en cache, invalidation par jeu et par liste, slugs forgés), filtres bornés, recherche sans accent ni casse, jokers échappés, tri en liste blanche, prix en centimes ; **F-08** : AES-GCM (aller-retour, IV aléatoire, chiffré altéré octet par octet, tronqué, recopié sur une autre offre, autre clé maître), HMAC (forme canonique, dépend du secret), secrets invalides, normalisation et formats refusés (formules, injections, contrôles), import (rapport, doublons, BOM, point-virgule, lots de 500, plafond de 1 000, panne en cours), révélation, Voter de propriété | 298 / 298 ✅ |
+| API : intégration (`tests/Integration`) | PostgreSQL et Redis réels : panier, stock et réservation ; **F-03** : `RedisStockRefresh` (TTL 7 j, rotation, réutilisation, expiration réelle), `RedisRevocationJwt`, `RedisLimiteurDebit` (fenêtre fixe, `Retry-After`), `UtilisateurRepository` (casse, rôles, doublon, injections SQL, compte anonymisé), parcours HTTP complet inscription, connexion, refresh, rotation, déconnexion, **F-01** : `CatalogueRepository` (filtres combinés, tris, pagination, fiche, langue de repli, injections), `RedisCatalogueCache` (clés, TTL, version des listes, entrée corrompue, Redis arrêté), API `/api/jeux` de bout en bout (cache et invalidation) ; **F-08** : import multipart de bout en bout (rapport, compteurs en base, suffixes, journal, réimport, rôles, offre inconnue ou retirée, fichier absent, trop gros, mauvaise extension, 1 001 lignes, message EN), révélation (acheteur, journal à chaque affichage, IP hachée, clé d'autrui = 404, commande à vérifier ou remboursée = 409, back-office = 403, chiffré altéré = 500 générique) | 213 / 213 ✅ |
+| API : sécurité (`tests/Security`) | **F-03** : JWT falsifié, `alg: none` (5 variantes), confusion RS256 / HS256, mauvaise clé, expiré, révoqué, jeton intermédiaire A2F, charges hostiles ; matrice RBAC complète **par HTTP** (403 générique, 401 visiteur) ; CSRF du refresh (Origin, double soumission, jeton non consommé après refus) ; injections SQL, confusion de types, mass assignment, XSS dans les noms, énumération et temps de réponse, limitation par adresse ; **F-01** : injections SQL par la recherche, le tri et les filtres, jokers LIKE, confusion de types, clés Redis forgées, déni de service par la taille, aucun écho de la saisie ; **F-08** : aucune clé en clair dans la base, les journaux ni les réponses (4 variantes d'écriture, hexadécimal compris), chiffré versionné avec IV et étiquette, empreinte HMAC et non simple SHA-256 | 179 / 179 ✅ |
 | Front (Vitest) | Client HTTP (jeton en mémoire, refresh silencieux, requêtes simultanées, `Retry-After`), session sans stockage persistant, API d'authentification, traduction des erreurs, écran E05 (champs, `autocomplete`, erreurs reliées, focus du résumé, FR / EN), session rétablie au chargement, déconnexion, parité des traductions ; **F-01** : sérialisation des filtres et de l’URL (assainissement), E02 (grille, filtres en fieldset, aria-live, pagination, jaquettes en différé, HTML non interprété), E03 (offres, stock en texte, ajout au panier, 404) | 131 / 131 ✅ |
 | CI | `composer validate --strict`, `composer audit`, lint YAML et container, `npm audit`, oxlint, build typé, validation `compose.yaml`, tests SQL ; clés JWT jetables générées par la CI | Verte sur chaque PR |
 
@@ -844,6 +901,7 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Internationalisation | Front FR / EN (sélecteur mémorisé, `lang`, clés typées, parité testée) ; erreurs de l'API traduites selon `Accept-Language` (F-02) | `front/src/i18n/`, `api/translations/` |
 | Panier et réservation | API du panier sur Redis, règles de quantité et de stock, minuteur de réservation, libération planifiée des réservations expirées (F-05) | `api/src/Service/Panier/`, `api/src/Infrastructure/Redis/` |
 | Authentification et RBAC | Inscription, connexion, JWT RS256 de 15 min en mémoire, refresh opaque de 7 j à rotation et détection de réutilisation (Redis), CSRF du refresh, argon2id, limitation de débit, matrice RBAC en voter, jeton intermédiaire A2F préparé ; écran E05 FR / EN (F-03) | `api/src/Service/Auth/`, `api/src/Security/`, `api/src/Infrastructure/Redis/`, `front/src/features/auth/`, `api/tests/Security/` |
+| Clés de licence | Import CSV en back-office (rapport ligne à ligne, 1 000 clés, lots de 500), chiffrement AES-256-GCM lié à l'offre, empreinte HMAC unique, 4 derniers caractères seuls en clair, révélation à l'acheteur d'une commande payée, journal d'audit à chaque affichage ; tests de sécurité sans clé en clair (F-08) | `api/src/Service/Cles/`, `api/src/Infrastructure/Crypto/`, `api/tests/Security/ClesLicenceSecuriteTest.php` |
 | Catalogue et cache Redis | `GET /api/jeux` (pagination à 20, recherche sans accent ni casse, filtres plateforme / genre / prix / PEGI, tris en liste blanche), fiche et valeurs des filtres, SQL paramétré, cache Redis à invalidation par version, repli sur PostgreSQL ; écrans E02 et E03 FR / EN, critères dans l'URL, jaquettes en différé (F-01) | `api/src/Service/Catalogue/`, `api/src/Repository/CatalogueRepository.php`, `api/src/Infrastructure/Redis/RedisCatalogueCache.php`, `front/src/features/catalogue/` |
 
 ### 13.2 Pas encore fait
@@ -854,7 +912,7 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 | Socle | CODEOWNERS, modèles d'issue et de PR, CONTRIBUTING, import du ruleset de `main` | T-00 (#2) |
 | CI complète | PHPStan, Semgrep, tests avec PostgreSQL et Redis, couverture | T-03 (#14) |
 | Déploiement | Hébergeur UE, recette automatique, production sur tag | T-04 (#6) |
-| Features | A2F (saisie du code TOTP, enrôlement, codes de secours), commande et concurrence, paiement, clés, back-office ; branchement de l'invalidation du cache catalogue sur les écritures (`invaliderJeu`, `invaliderListes`) | F-04, F-06 à F-10 |
+| Features | A2F (saisie du code TOTP, enrôlement, codes de secours), commande et concurrence, paiement, back-office (dont l'écran E13 d'import des clés et l'affichage masqué) ; branchement de l'invalidation du cache catalogue sur les écritures (`invaliderJeu`, `invaliderListes`) | F-04, F-06 à F-10 |
 | Dossier | Comptes rendus quotidiens, veille personnelle (§10, premières entrées faites), recherche anglophone (§11), extraits métier restants (§8.7), jeu d'essai de l'achat concurrent (§9.3.2), captures (dont E02, E03 et E05), bilan | L-03 (#34) |
 | Livraison | Tests de sécurité croisés et audit RGAA, v1.0.0 et restauration, diaporama, répétition | L-01, L-02, L-04, L-05 |
 
@@ -863,6 +921,7 @@ Entrées relevées pendant F-03 (authentification), toutes consultées le 25/11/
 - **Planning** : le panier (F-05), l'authentification (F-03) et le catalogue (F-01) sont livrés ; le catalogue (F-01) est livré ; l'A2F (F-04) et le tunnel de commande (F-06 à F-10) restent à faire, c'est la priorité absolue pour la suite.
 - **Recette** : aucun déploiement n'existe encore (T-04) ; la case « déployé en recette et montré lors de la démo » de la définition de terminé ne peut pas être cochée pour F-03.
 - **Proxy et adresse du client** : la limitation de débit s'appuie sur `Request::getClientIp()` ; derrière un reverse proxy (Caddy en recette), `trusted_proxies` devra être configuré par T-04, faute de quoi toutes les requêtes partageraient l'adresse du proxy.
+- **Clés de licence (F-08)** : la route d'import `/api/admin/**` est réservée au rôle, mais l'A2F obligatoire du back-office n'existera qu'avec F-04 ; les clés du jeu d'essai ont un faux chiffré et ne se révèlent pas (erreur 500 générique), il faut importer des clés pour la démonstration ; les secrets `LICENSE_KEY_*` devront être ajoutés aux environnements GitHub de T-04.
 - **Figma** : le plan Starter limite le fichier à 3 pages et l'outil d'automatisation à un quota mensuel, déjà atteint ; la fin des maquettes se fera à la main ou au renouvellement du quota.
 - **Dossier individuel** : les §4.3, §10, §11 et §12 doivent être personnalisés par chaque candidat.
 - **Traçabilité** : la case « Dossier de projet complété » de C-03 a été cochée avant que le dossier n'existe ; elle est devenue vraie avec la fusion de la PR #41.

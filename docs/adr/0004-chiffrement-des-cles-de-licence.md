@@ -72,6 +72,22 @@ Le déchiffrement n'existe qu'à un seul endroit : `LicenceService::reveler()`, 
 - Documentation : diagramme `seq-import-cles` et `seq-revelation-cle` (voir [conventions UML](../uml/README.md)).
 - F-08 : n'exposer en sortie d'API que les quatre derniers caractères de la clé, quel que soit l'arbitrage retenu sur l'écran de back-office.
 
+## Mise en œuvre (F-08)
+
+Points que la décision laissait ouverts et que l'implémentation a tranchés. Aucun ne remet la décision en cause.
+
+| Point | Choix | Raison |
+|---|---|---|
+| Affichage des 4 derniers caractères (point non tranché plus haut) | Colonne **`cle_licence.suffixe`** (`char(4)`, en clair), calculée à l'import ; une clé vendue ne peut plus la modifier (`trg_cle_licence_protection`). Choix du binôme le 26/11/2026 | Pas de second point de déchiffrement : seul `LicenceService::reveler()` déchiffre. 4 caractères sur 8 à 64 réduisent très peu la confidentialité |
+| Format du chiffré | `0x01` (version) \| IV 12 octets \| étiquette GCM 16 octets \| chiffré | L'octet de version prépare la rotation de la clé maître : un chiffré d'une autre version est refusé au lieu d'être mal lu |
+| Données associées (AAD) | `sidekey/cle_licence/v1/<offre_id>` | Recopier le chiffré d'une clé sur une autre offre le rend illisible |
+| Normalisation avant HMAC | Majuscules, espaces de bord retirés, **tirets ignorés** ; format accepté : 8 à 64 caractères `[A-Z0-9]` séparés par des tirets simples | « abcde-12345 » et « ABCDE12345 » sont la même clé, donc un doublon ; les formules de tableur et caractères de contrôle sont refusés |
+| Noms des secrets | `LICENSE_KEY_ENC_KEY` et `LICENSE_KEY_HMAC_KEY` (32 octets en base64, `openssl rand -base64 32`), contrôlés au démarrage du service : absents, mal formés ou identiques → refus | Ces noms figuraient déjà dans `api/.env.example` ; les noms `APP_AES_KEY` / `APP_HMAC_KEY` cités plus haut ne sont pas utilisés |
+| Doublons à l'import | Ceux du fichier écartés avant insertion, ceux du stock par `INSERT … ON CONFLICT (empreinte) DO NOTHING`, par lots de 500 dans une transaction | La contrainte `UNIQUE` tranche même entre deux imports simultanés, sans annuler tout le lot |
+| Révélation | `POST /api/cles/{id}/revelation` ; la requête SQL ne lit que les clés de l'utilisateur (404 identique pour une clé d'autrui ou inexistante), puis `CleLicenceVoter` exige CLIENT, commande `PAYEE` et clé `VENDUE` (sinon 409) | Trois verrous successifs ; aucun rôle du back-office ne déchiffre, l'administrateur compris |
+| Journal | `REVELATION_CLE` à chaque affichage, `IMPORT_CLES` à chaque import ; adresse IP stockée en HMAC (clé dérivée d'`APP_SECRET` par HKDF) | BX-16 sans valeur de clé ni IP en clair |
+| Traces | Paramètres portant une clé en `#[\SensitiveParameter]`, objets sans valeur dans `var_dump` (`__debugInfo`) | Une trace d'exception ne recopie jamais une clé |
+
 ## Références
 
 - [Cahier des charges v1.2](../cahier_des_charges_v1.2_SideKey.md) — §6.1 (RG-03, RG-04), §8.2, §9.2, §9.4, §9.5, §11.1, §11.2, §14.1, §15.4.

@@ -26,3 +26,12 @@ error:
     # Catalogue (F-01)
     jeu_introuvable: "Ce jeu n'existe pas ou n'est plus au catalogue."
     page_introuvable: "Cette page de résultats n'existe pas."
+    # Clés de licence (F-08) : jamais de valeur de clé dans un message
+    cle_introuvable: "Cette clé n'existe pas ou ne vous appartient pas."
+    cle_non_revelable: "Cette clé sera disponible dès que le paiement de la commande sera confirmé."
+    import_fichier_absent: 'Joignez un fichier CSV de clés (champ « fichier »).'
+    import_fichier_trop_gros: 'Le fichier dépasse %maximum% Kio.'
+    import_fichier_type: 'Seuls les fichiers .csv et .txt sont acceptés.'
+    import_encodage: 'Le fichier doit être encodé en UTF-8.'
+    import_vide: 'Le fichier ne contient aucune clé.'
+    import_trop_de_lignes: "Le fichier contient plus de %maximum% clés : découpez-le en plusieurs imports."

@@ -28,6 +28,13 @@ services:
         factory: ['Symfony\Component\Cache\Adapter\RedisAdapter', 'createConnection']
         arguments: ['%env(REDIS_URL)%', { lazy: true }]
 
+    # Clés de licence (F-08, ADR-0004) : AES-256-GCM et HMAC-SHA256, deux secrets distincts de 32 octets en base64.
+    # Résolus au premier usage (import ou révélation) : un secret absent ou invalide bloque ces deux routes seulement.
+    App\Infrastructure\Crypto\ChiffreurClesAesGcm:
+        arguments:
+            $cleChiffrementBase64: '%env(LICENSE_KEY_ENC_KEY)%'
+            $cleEmpreinteBase64: '%env(LICENSE_KEY_HMAC_KEY)%'
+
 
 when@test:
     services:
@@ -36,3 +43,9 @@ when@test:
             resource: '../tests/Support/Controller/'
             autowire: true
             tags: ['controller.service_arguments']
+
+        # Journaux des tests dans un fichier (var/cache/test/journal.log) plutôt que sur la sortie d'erreur : les
+        # tests de sécurité de F-08 y vérifient qu'aucune clé de licence n'apparaît en clair.
+        logger:
+            class: Symfony\Component\HttpKernel\Log\Logger
+            arguments: ['info', '%kernel.cache_dir%/journal.log']
