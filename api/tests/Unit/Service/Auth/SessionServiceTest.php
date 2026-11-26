@@ -61,6 +61,35 @@ final class SessionServiceTest extends TestCase
         self::assertSame([hash('sha256', $session->jetonRefresh)], array_keys($this->refresh->actifs), 'seule l\'empreinte est stockée');
     }
 
+    public function testLaRevendicationA2fSuitL_EtatDuCompteOuLaDemandeExplicite(): void
+    {
+        self::assertFalse(EmetteurFactice::lire($this->service->ouvrir(FabriqueCompte::creer(1, ['CLIENT']))->jetonAcces)['a2f'], 'client sans A2F');
+        self::assertTrue(EmetteurFactice::lire($this->service->ouvrir(FabriqueCompte::creer(1, ['ADMIN'], a2f: true))->jetonAcces)['a2f']);
+        self::assertTrue(EmetteurFactice::lire($this->service->ouvrir(FabriqueCompte::creer(1, ['ADMIN']), a2fValide: true)->jetonAcces)['a2f'], 'après vérification du code');
+        self::assertFalse(EmetteurFactice::lire($this->service->ouvrir(FabriqueCompte::creer(1, ['ADMIN']), a2fValide: false)->jetonAcces)['a2f']);
+    }
+
+    public function testLeRafraichissementGardeLaRevendicationDesLA2fActive(): void
+    {
+        $protege = FabriqueCompte::creer(1, ['ADMIN'], a2f: true);
+        $this->comptes->ajouter($protege);
+        $session = $this->service->ouvrir($protege, a2fValide: true);
+
+        $suite = $this->service->rafraichir($session->jetonRefresh);
+
+        self::assertTrue(EmetteurFactice::lire($suite->jetonAcces)['a2f']);
+    }
+
+    public function testUnRafraichissementNeDonneJamaisA2fAUnCompteSansA2fActive(): void
+    {
+        // Même si la session avait été ouverte avec a2fValide = true, la revendication ne survit pas à une A2F désactivée.
+        $sans = FabriqueCompte::creer(1, ['GESTIONNAIRE'], a2f: false);
+        $this->comptes->ajouter($sans);
+        $session = $this->service->ouvrir($sans, a2fValide: true);
+
+        self::assertFalse(EmetteurFactice::lire($this->service->rafraichir($session->jetonRefresh)->jetonAcces)['a2f']);
+    }
+
     public function testDeuxSessionsOntDesJetonsEtDesFamillesDistincts(): void
     {
         $a = $this->service->ouvrir($this->compte());

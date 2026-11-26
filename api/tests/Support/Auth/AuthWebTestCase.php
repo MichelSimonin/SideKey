@@ -157,8 +157,12 @@ abstract class AuthWebTestCase extends WebTestCase
         $this->client->request('POST', '/api/token/refresh', server: $serveur);
     }
 
-    /** Jeton d'accès émis directement pour un compte du jeu d'essai (y compris l'ADMIN, qui passe par l'A2F à la connexion). */
-    protected function jetonPour(string $email): string
+    /**
+     * Jeton d'accès émis directement pour un compte du jeu d'essai (y compris l'ADMIN, qui passe par l'A2F à la connexion).
+     * Par défaut la session est réputée avoir passé le second facteur (revendication « a2f ») ; $a2fValide = false simule un
+     * jeton de back-office sans second facteur.
+     */
+    protected function jetonPour(string $email, bool $a2fValide = true): string
     {
         $repository = static::getContainer()->get(UtilisateurRepository::class);
         self::assertInstanceOf(UtilisateurRepository::class, $repository);
@@ -167,7 +171,7 @@ abstract class AuthWebTestCase extends WebTestCase
         $sessions = static::getContainer()->get(SessionService::class);
         self::assertInstanceOf(SessionService::class, $sessions);
 
-        $jeton = $sessions->ouvrir($compte)->jetonAcces;
+        $jeton = $sessions->ouvrir($compte, $a2fValide)->jetonAcces;
         $this->noter($jeton);
 
         return $jeton;
