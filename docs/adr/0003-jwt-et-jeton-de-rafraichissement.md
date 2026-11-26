@@ -96,6 +96,21 @@ Points que la décision laissait ouverts et que l'implémentation a tranchés. A
 | Rôles | Relus **en base à chaque requête** (`UtilisateurProvider`) ; les rôles du jeton ne servent jamais à décider | Retirer un rôle ou désactiver un compte prend effet aussitôt |
 | Limitation de débit | Compteur Redis maison (`INCR` + `EXPIRE` en Lua), clés `rl:login:{ip}` (10 / 15 min) et `rl:register:{ip}` (5 / h) ; pas de `symfony/rate-limiter` | Les clés de ce composant sont hachées : elles ne correspondent pas au CDC §9.8 |
 
+## Mise en œuvre (F-04)
+
+| Point | Choix | Raison |
+|---|---|---|
+| Portée du jeton intermédiaire | Revendication `typ: a2f`, vérifiée **d'après la route** : `/api/connexion/a2f…` n'accepte que lui, toutes les autres routes n'acceptent que `typ: access` | Aucun jeton n'est valable partout : le jeton intermédiaire ne peut jamais atteindre l'API sans second facteur |
+| Usage du jeton intermédiaire | Révoqué (`jwt:deny:{jti}`) dès qu'il a servi à ouvrir une session | Sinon un jeton intercepté pourrait ouvrir plusieurs sessions pendant 5 min |
+| A2F obligatoire sans configuration | Rôle du back-office sans A2F : réponse `a2f_enrolement`, jeton intermédiaire seulement ; l'enrôlement est la seule suite | Le mot de passe seul ne donne jamais accès au back-office, même la première fois |
+| Preuve du second facteur | Revendication booléenne `a2f` dans le jeton d'accès, exigée par `RbacVoter` pour toute permission du back-office ; renouvelée avec la session tant que `a2f_active` | Le rôle ne suffit pas ; une session ouverte avant F-04 ou sans code reste à 403 sur le back-office |
+| Secret TOTP | 160 bits, chiffré AES-256-GCM lié au compte, clé `TOTP_ENC_KEY` distincte de celles des clés de licence | Compromettre une clé n'ouvre pas l'autre ; recopier un chiffré sur un autre compte le rend illisible |
+| Codes de secours | 10 codes de 50 bits, argon2id, UPDATE conditionnel atomique, supprimés et régénérés en bloc à l'activation | Décision du 24/11/2026 ; usage unique garanti même sous concurrence |
+| Rejeu | `a2f:used:{userId}:{pas}` en `SET NX` (120 s) | Un code observé ne se rejoue pas dans sa fenêtre de ±1 pas |
+| Tentatives | `rl:a2f:{userId}` : 5 par 15 min, comptées avant la vérification, codes de secours compris | Un code à 6 chiffres ne se force pas ; la limite est par compte car le jeton intermédiaire identifie l'utilisateur |
+| Affichage des codes | Montrés une seule fois ; la session ne s'ouvre qu'après que l'utilisateur les a vus | Une session ouverte trop tôt ferait changer d'écran avant la lecture |
+| Panne de Redis | Réservation de pas impossible : vérification refusée ; aucune acceptation par défaut | Fail Securely, comme pour la révocation |
+
 ## Références
 
 - [Cahier des charges v1.2](../cahier_des_charges_v1.2_SideKey.md) — §0.2 (B2, B3, B9), §5.3 (US-20 à US-25), §9.8, §11.1, §11.2, §11.4, §14.4, §18.

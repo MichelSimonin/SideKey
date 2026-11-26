@@ -88,6 +88,10 @@ Points que la décision laissait ouverts et que l'implémentation a tranchés. A
 | Journal | `REVELATION_CLE` à chaque affichage, `IMPORT_CLES` à chaque import ; adresse IP stockée en HMAC (clé dérivée d'`APP_SECRET` par HKDF) | BX-16 sans valeur de clé ni IP en clair |
 | Traces | Paramètres portant une clé en `#[\SensitiveParameter]`, objets sans valeur dans `var_dump` (`__debugInfo`) | Une trace d'exception ne recopie jamais une clé |
 
+## Complément (F-04) : secret TOTP
+
+Le secret TOTP des comptes (colonne `utilisateur.totp_secret_chiffre`) est chiffré avec le même algorithme, AES-256-GCM, mais avec une clé **distincte**, `TOTP_ENC_KEY` (32 octets en base64, hors dépôt), et des données associées liées au compte (`sidekey/totp/v1/{userId}`). La perte de cette clé rend les secrets illisibles : les comptes concernés ne se connectent plus qu'avec un code de secours.
+
 ## Références
 
 - [Cahier des charges v1.2](../cahier_des_charges_v1.2_SideKey.md) — §6.1 (RG-03, RG-04), §8.2, §9.2, §9.4, §9.5, §11.1, §11.2, §14.1, §15.4.
