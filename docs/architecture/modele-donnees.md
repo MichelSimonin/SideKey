@@ -205,6 +205,7 @@ Sources : [`api/sql/functions/001_fonctions.sql`](../../api/sql/functions/001_fo
 | `fn_reserver_cles(offre, quantite, ligne)` | vérifie les paramètres, la ligne, la commande et l'offre ; `FOR UPDATE SKIP LOCKED`, clés les plus anciennes d'abord ; tout ou rien | `cle_licence` `DISPONIBLE` → `RESERVEE`, rattachée à la ligne | `22004`, `22023`, `P0002`, **`SK001`** stock insuffisant, `SK005` commande expirée ou close |
 | `fn_valider_commande(commande)` | validation atomique et **idempotente** du paiement ; accepte `EN_ATTENTE_PAIEMENT` non expirée ou `A_VERIFIER` ; exige une clé réservée par unité | clés `VENDUE`, commande `PAYEE` et `payee_le` | `22004`, `P0002`, **`SK005`** |
 | `fn_liberer_reservations_expirees()` | balayage minute (Symfony Scheduler), `SKIP LOCKED` | commandes expirées → `EXPIREE`, leurs clés → `DISPONIBLE` | — (renvoie le nombre de commandes expirées) |
+| `fn_annuler_commande(commande)` (F-06) | verrouille la commande ; elle doit être `EN_ATTENTE_PAIEMENT` et dans son délai | commande → `ANNULEE`, ses clés `RESERVEE` → `DISPONIBLE` ; renvoie le nombre de clés libérées | `22004`, `P0002`, **`SK005`** plus annulable |
 | `trg_commande_transition` | refuse une transition hors §6.4 (à l'insertion, le statut est contrôlé par `ck_commande_statut`) | applique §6.4 en base | **`SK002`** |
 | `trg_commande_historique` | historise la création et chaque changement de statut ; auteur lu dans `sidekey.auteur_id` (`SET LOCAL` posé par l'API), `NULL` pour le système | alimente `commande_historique` (RG-21) | — |
 | `trg_cle_licence_protection` | interdit `UPDATE` / `DELETE` d'une clé `VENDUE`, sauf la première révélation (`revelee_le` de `NULL` à une date) | RG-04 | **`SK003`** |
@@ -296,8 +297,8 @@ Trois choix de modélisation méritent d'être explicites :
 | UTILISATEUR | `utilisateur` | `Utilisateur` | `UtilisateurRepository` | `GET /api/moi` |
 | UTILISATEUR_ROLE | `utilisateur_role` | `UtilisateurRole` (entité de jointure) | `UtilisateurRepository` | `POST /api/admin/utilisateurs` |
 | CODE_SECOURS | `code_secours` | `CodeSecours` | `CodeSecoursRepository` | `POST /api/2fa/secours` |
-| COMMANDE | `commande` | `Commande` | `CommandeRepository` | `POST /api/commandes` |
-| LIGNE_COMMANDE | `ligne_commande` | `LigneCommande` | (via `Commande`) | `POST /api/commandes` |
+| COMMANDE | `commande` | `CommandeDetail`, `CommandeResume` (projections DBAL) | `CommandeRepository` | `POST /api/commandes`, `GET /api/commandes/{reference}` |
+| LIGNE_COMMANDE | `ligne_commande` | `LigneCommandeDetail` | `CommandeRepository` | `POST /api/commandes` |
 | PAIEMENT | `paiement` | `Paiement` | `PaiementRepository` | `POST /api/paiements` |
 | COMMANDE_HISTORIQUE | `commande_historique` | `CommandeHistorique` | `CommandeHistoriqueRepository` | `GET /api/admin/commandes/{reference}` |
 | AVIS | `avis` | `Avis` | `AvisRepository` | `POST /api/jeux/{slug}/avis` |

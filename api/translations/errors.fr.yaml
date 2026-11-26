@@ -40,3 +40,11 @@ error:
     a2f_deja_active: "La double authentification est déjà activée sur ce compte."
     a2f_non_active: "La double authentification n'est pas activée sur ce compte."
     a2f_enrolement_absent: "Aucun enrôlement en cours : recommencez la configuration."
+    # Commandes (F-06)
+    compte_non_verifie: 'Vérifiez votre adresse e-mail avant de commander.'
+    panier_vide: 'Votre panier est vide.'
+    panier_modifie: "Votre panier a changé (stock ou disponibilité) : vérifiez-le avant de commander."
+    majorite_non_confirmee: 'Votre panier contient un jeu PEGI 18 : confirmez que vous êtes majeur pour commander.'
+    commande_en_cours: 'Vous avez déjà une commande en attente de paiement : payez-la ou annulez-la avant d''en passer une autre.'
+    commande_introuvable: "Cette commande n'existe pas."
+    commande_non_annulable: "Cette commande ne peut plus être annulée : elle a été payée, a expiré ou est déjà annulée."

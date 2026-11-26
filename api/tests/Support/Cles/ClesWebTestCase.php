@@ -14,7 +14,8 @@ use App\Tests\Support\Auth\FabriqueCompte;
  * Base des tests HTTP de F-08 : API réelle, PostgreSQL et Redis réels, secrets de .env.test.
  *
  * Chaque test crée sa propre offre (sur une plateforme sans offre active pour le jeu) : les clés importées
- * ne touchent pas au stock du jeu d'essai, et tout est retiré à la fin. Les commandes et les clés VENDUES
+ * ne touchent pas au stock du jeu d'essai, et tout est retiré à la fin (commandes en attente annulées ;
+ * une offre gardée par une ligne de commande est seulement retirée de la vente). Les commandes et les clés VENDUES
  * des tests de révélation restent en base (une clé vendue ne se supprime pas, trigger RG-04), sur des
  * comptes « cles-test-* » dédiés : elles ne gênent aucun autre test.
  */
@@ -28,28 +29,37 @@ abstract class ClesWebTestCase extends AuthWebTestCase
     protected function tearDown(): void
     {
         foreach ($this->offresCreees as $offre) {
+            // Commandes encore en attente sur l'offre (tests F-06) : annulées, leurs clés reviennent en stock
+            $this->connexion->executeStatement(
+                "SELECT fn_annuler_commande(c.id) FROM commande c WHERE c.statut = 'EN_ATTENTE_PAIEMENT' AND c.expire_le > now() AND EXISTS (SELECT 1 FROM ligne_commande l WHERE l.commande_id = c.id AND l.offre_id = CAST(:o AS uuid))",
+                ['o' => $offre],
+            );
+            $this->connexion->executeStatement("SELECT fn_liberer_reservations_expirees()");
             $this->connexion->executeStatement("DELETE FROM cle_licence WHERE offre_id = CAST(:o AS uuid) AND statut = 'DISPONIBLE'", ['o' => $offre]);
             $this->connexion->executeStatement('DELETE FROM import_cles WHERE id NOT IN (SELECT import_cles_id FROM cle_licence WHERE import_cles_id IS NOT NULL) AND fichier_nom LIKE :p', ['p' => 'cles-test-%']);
-            $this->connexion->executeStatement('DELETE FROM offre WHERE id = CAST(:o AS uuid) AND NOT EXISTS (SELECT 1 FROM cle_licence WHERE offre_id = CAST(:o AS uuid))', ['o' => $offre]);
+            $this->connexion->executeStatement('DELETE FROM offre WHERE id = CAST(:o AS uuid) AND NOT EXISTS (SELECT 1 FROM cle_licence WHERE offre_id = CAST(:o AS uuid)) AND NOT EXISTS (SELECT 1 FROM ligne_commande WHERE offre_id = CAST(:o AS uuid))', ['o' => $offre]);
+            // Offre gardée par une ligne de commande (historique non supprimable) : retirée de la vente
+            $this->connexion->executeStatement('UPDATE offre SET actif = false WHERE id = CAST(:o AS uuid)', ['o' => $offre]);
         }
         $this->offresCreees = [];
         parent::tearDown();
     }
 
     /** Nouvelle offre en vente, sans aucune clé. */
-    protected function creerOffre(bool $active = true): string
+    protected function creerOffre(bool $active = true, bool $pegi18 = false, string $prix = '19.99'): string
     {
         $offre = (string) $this->connexion->fetchOne(
             <<<'SQL'
                 INSERT INTO offre (prix_ttc, actif, jeu_id, plateforme_id)
-                SELECT 19.99, :actif, j.id, p.id
+                SELECT CAST(:prix AS numeric), :actif, j.id, p.id
                   FROM jeu j CROSS JOIN plateforme p
                  WHERE NOT EXISTS (SELECT 1 FROM offre o WHERE o.jeu_id = j.id AND o.plateforme_id = p.id AND o.actif)
+                   AND (j.pegi >= 18) = :pegi18
                  ORDER BY j.slug, p.code
                  LIMIT 1
                 RETURNING id::text
                 SQL,
-            ['actif' => $active ? 'true' : 'false'],
+            ['actif' => $active ? 'true' : 'false', 'pegi18' => $pegi18 ? 'true' : 'false', 'prix' => $prix],
         );
         self::assertNotSame('', $offre, 'une combinaison jeu × plateforme libre doit exister');
         $this->offresCreees[] = $offre;
@@ -129,6 +139,29 @@ abstract class ClesWebTestCase extends AuthWebTestCase
             ],
             ['chiffre' => \Doctrine\DBAL\ParameterType::BINARY, 'empreinte' => \Doctrine\DBAL\ParameterType::BINARY],
         );
+    }
+
+    /**
+     * Met $nombre clés DISPONIBLES sur l'offre, chiffrées par le vrai service.
+     *
+     * @return list<string> valeurs en clair, dans l'ordre d'import
+     */
+    protected function stocker(string $offreId, int $nombre): array
+    {
+        $chiffrement = static::getContainer()->get(ChiffrementCles::class);
+        self::assertInstanceOf(ChiffrementCles::class, $chiffrement);
+        $valeurs = [];
+        for ($i = 0; $i < $nombre; ++$i) {
+            $cle = CleNormalisee::depuis($valeurs[] = self::nouvelleCle());
+            self::assertNotNull($cle);
+            $this->connexion->executeStatement(
+                'INSERT INTO cle_licence (cle_chiffree, empreinte, suffixe, offre_id, importee_le) VALUES (:c, :e, :s, CAST(:o AS uuid), now() + make_interval(secs => :i))',
+                ['c' => $chiffrement->chiffrer($cle, $offreId), 'e' => $chiffrement->empreinte($cle), 's' => $cle->suffixe(), 'o' => $offreId, 'i' => $i],
+                ['c' => \Doctrine\DBAL\ParameterType::BINARY, 'e' => \Doctrine\DBAL\ParameterType::BINARY],
+            );
+        }
+
+        return $valeurs;
     }
 
     /** Clé de licence aléatoire, unique d'un test à l'autre. */

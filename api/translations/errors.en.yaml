@@ -39,3 +39,11 @@ error:
     a2f_deja_active: 'Two-factor authentication is already enabled on this account.'
     a2f_non_active: 'Two-factor authentication is not enabled on this account.'
     a2f_enrolement_absent: 'No enrolment in progress: start the setup again.'
+    # Orders (F-06)
+    compte_non_verifie: 'Verify your email address before ordering.'
+    panier_vide: 'Your cart is empty.'
+    panier_modifie: 'Your cart has changed (stock or availability): review it before ordering.'
+    majorite_non_confirmee: 'Your cart contains a PEGI 18 game: confirm that you are of age to order.'
+    commande_en_cours: 'You already have an order awaiting payment: pay or cancel it before placing another one.'
+    commande_introuvable: 'This order does not exist.'
+    commande_non_annulable: 'This order can no longer be cancelled: it has been paid, has expired or is already cancelled.'
