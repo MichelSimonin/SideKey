@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useTranslation } from 'react-i18next'
 import { refreshSession } from '../../api/client'
 import { onSession } from '../../api/session'
-import type { CurrentUser, UserLanguage } from '../../api/types'
+import type { ConfirmationPayload, CurrentUser, UserLanguage } from '../../api/types'
 import { toSupportedLanguage } from '../../i18n/config'
 import * as authApi from './authApi'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './authContext'
@@ -59,9 +59,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [language],
   )
 
+  const verifyCode = useCallback(
+    async (token: string, code: string) => {
+      const user = await authApi.verifyCode(token, code)
+      void i18n.changeLanguage(user.langue)
+    },
+    [i18n],
+  )
+
+  const confirmEnrolment = useCallback((token: string, code: string) => authApi.confirmEnrolment(token, code), [])
+
+  const openSession = useCallback(
+    (confirmation: ConfirmationPayload) => {
+      authApi.openSession(confirmation)
+      void i18n.changeLanguage(confirmation.utilisateur.langue)
+    },
+    [i18n],
+  )
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, register, logout: () => authApi.logout() }),
-    [status, user, login, register],
+    () => ({
+      status,
+      user,
+      login,
+      register,
+      logout: () => authApi.logout(),
+      verifyCode,
+      startEnrolment: (token: string) => authApi.startEnrolment(token),
+      confirmEnrolment,
+      openSession,
+    }),
+    [status, user, login, register, verifyCode, confirmEnrolment, openSession],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>

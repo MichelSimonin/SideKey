@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { TextField } from '../../components/ui/TextField'
 import { ErrorSummary } from './ErrorSummary'
 import { feedbackFrom, NO_FEEDBACK, type FormFeedback } from './formFeedback'
+import { SecondFactorStep } from './SecondFactorStep'
 import { useAuth } from './useAuth'
 
 const IDS = {
@@ -26,7 +27,8 @@ export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [consent, setConsent] = useState(false)
   const [pending, setPending] = useState(false)
-  const [secondFactor, setSecondFactor] = useState(false)
+  const [step, setStep] = useState<{ mode: 'code' | 'enrolment'; token: string } | null>(null)
+  const [notice, setNotice] = useState('')
   const [feedback, setFeedback] = useState<FormFeedback>(NO_FEEDBACK)
 
   const labels = {
@@ -39,7 +41,7 @@ export function RegisterForm() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSecondFactor(false)
+    setNotice('')
 
     // Contrôle de confort : le serveur revalide tout (politique de mot de passe, formats, consentement).
     const missing: Record<string, string> = {}
@@ -64,7 +66,8 @@ export function RegisterForm() {
         consentement: consent,
       })
       if (result.kind === 'second-factor') {
-        setSecondFactor(true)
+        setPassword('')   // le mot de passe ne reste pas en mémoire pendant la seconde étape
+        setStep({ mode: result.mode, token: result.token })
       } else {
         void navigate('/')
       }
@@ -75,10 +78,23 @@ export function RegisterForm() {
     }
   }
 
+  if (step !== null) {
+    return (
+      <SecondFactorStep
+        mode={step.mode}
+        token={step.token}
+        onRestart={(message) => {
+          setStep(null)
+          setNotice(message ?? '')
+        }}
+      />
+    )
+  }
+
   return (
     <form onSubmit={(event) => void onSubmit(event)} noValidate aria-busy={pending}>
       <ErrorSummary feedback={feedback} fieldIds={IDS} labels={labels} />
-      {secondFactor ? <p role="status">{t('auth.secondFactor')}</p> : null}
+      {notice !== '' ? <p role="status">{notice}</p> : null}
 
       <TextField
         id={IDS.prenom}

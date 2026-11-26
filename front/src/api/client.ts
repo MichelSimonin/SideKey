@@ -153,6 +153,11 @@ export type RequestOptions = {
   fetchFn?: typeof fetch
   /** Permet d'abandonner une requête devenue inutile (changement de filtres, de page, de langue). */
   signal?: AbortSignal
+  /**
+   * Jeton à présenter à la place du jeton d'accès : le jeton intermédiaire de la seconde étape de connexion (A2F), qui n'ouvre
+   * que les routes /api/connexion/a2f. Il reste en mémoire dans le composant qui le détient. Pas de rafraîchissement sur 401.
+   */
+  bearer?: string
 }
 
 /**
@@ -162,10 +167,10 @@ export type RequestOptions = {
  * est effacée et l'erreur 401 remonte (l'interface renvoie vers la connexion).
  */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, fetchFn = fetch, signal } = options
+  const { method = 'GET', body, fetchFn = fetch, signal, bearer } = options
 
   const send = (): Promise<Response> => {
-    const token = getAccessToken()
+    const token = bearer ?? getAccessToken()
     const headers: Record<string, string> = apiHeaders()
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json'
@@ -182,7 +187,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     })
   }
 
-  const hadSession = getAccessToken() !== null
+  const hadSession = bearer === undefined && getAccessToken() !== null
   let response = await send()
   if (response.status === 401 && hadSession) {
     if ((await refreshSession(fetchFn)) !== null) {

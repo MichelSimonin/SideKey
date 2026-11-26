@@ -488,3 +488,41 @@ main {
 .offer p {
   margin: 0 0 0.5rem;
 }
+
+/* --- Seconde étape de connexion (A2F, F-04) ---------------------------------------------------------- */
+.a2f h2:focus {
+  outline: 2px solid var(--sk-focus);
+  outline-offset: 4px;
+}
+
+.a2f-steps {
+  padding-inline-start: 1.25rem;
+}
+
+.a2f-qr img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--sk-border);
+  background: #fff;
+}
+
+.a2f-secret,
+.backup-codes code {
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--sk-border);
+  border-radius: 0.25rem;
+  background: #f3f4f6;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+}
+
+.backup-codes {
+  columns: 2;
+  margin: 1rem 0;
+  padding-inline-start: 1.5rem;
+}
+
+.backup-codes li {
+  margin-block-end: 0.5rem;
+}

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { TextField } from '../../components/ui/TextField'
 import { ErrorSummary } from './ErrorSummary'
 import { feedbackFrom, NO_FEEDBACK, type FormFeedback } from './formFeedback'
+import { SecondFactorStep } from './SecondFactorStep'
 import { useAuth } from './useAuth'
 
 const IDS = { email: 'login-email', motDePasse: 'login-password' }
@@ -17,14 +18,15 @@ export function LoginForm() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [pending, setPending] = useState(false)
-  const [secondFactor, setSecondFactor] = useState(false)
+  const [step, setStep] = useState<{ mode: 'code' | 'enrolment'; token: string } | null>(null)
+  const [notice, setNotice] = useState('')
   const [feedback, setFeedback] = useState<FormFeedback>(NO_FEEDBACK)
 
   const labels = { email: t('auth.fields.email'), motDePasse: t('auth.fields.password') }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSecondFactor(false)
+    setNotice('')
 
     // Contrôle de confort : l'API reste seule juge (validation côté serveur).
     const missing: Record<string, string> = {}
@@ -40,8 +42,8 @@ export function LoginForm() {
     try {
       const result = await login({ email: email.trim(), motDePasse: password })
       if (result.kind === 'second-factor') {
-        setPassword('')
-        setSecondFactor(true)
+        setPassword('')   // le mot de passe ne reste pas en mémoire pendant la seconde étape
+        setStep({ mode: result.mode, token: result.token })
       } else {
         void navigate('/')
       }
@@ -52,10 +54,23 @@ export function LoginForm() {
     }
   }
 
+  if (step !== null) {
+    return (
+      <SecondFactorStep
+        mode={step.mode}
+        token={step.token}
+        onRestart={(message) => {
+          setStep(null)
+          setNotice(message ?? '')
+        }}
+      />
+    )
+  }
+
   return (
     <form onSubmit={(event) => void onSubmit(event)} noValidate aria-busy={pending}>
       <ErrorSummary feedback={feedback} fieldIds={IDS} labels={labels} />
-      {secondFactor ? <p role="status">{t('auth.secondFactor')}</p> : null}
+      {notice !== '' ? <p role="status">{notice}</p> : null}
 
       <TextField
         id={IDS.email}
