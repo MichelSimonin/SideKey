@@ -48,3 +48,16 @@ error:
     commande_en_cours: 'Vous avez déjà une commande en attente de paiement : payez-la ou annulez-la avant d''en passer une autre.'
     commande_introuvable: "Cette commande n'existe pas."
     commande_non_annulable: "Cette commande ne peut plus être annulée : elle a été payée, a expiré ou est déjà annulée."
+    # Gestion du catalogue (F-09) : messages génériques, aucune valeur saisie ni détail SQL
+    invalid_value: 'Valeur invalide.'
+    catalogue_introuvable: "Cet élément n'existe pas."
+    catalogue_utilisee: "Suppression impossible : cet élément est encore utilisé. Désactivez-le plutôt."
+    editeur_doublon: 'Un éditeur porte déjà ce nom.'
+    plateforme_doublon: 'Une plateforme porte déjà ce code.'
+    slug_doublon: 'Ce slug est déjà utilisé par un autre jeu.'
+    offre_doublon: 'Ce jeu a déjà une offre active sur cette plateforme.'
+    offre_conflit: 'Offre modifiée par un collègue : rechargez la page avant de réessayer.'
+    jaquette_absente: 'Joignez une image (champ « jaquette »).'
+    jaquette_taille: "L'image dépasse %max% Kio."
+    jaquette_type: "Seules les images WebP valides sont acceptées."
+    jaquette_dimensions: "Les dimensions de l'image doivent être comprises entre %min% et %max% pixels."

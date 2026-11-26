@@ -46,6 +46,17 @@ abstract class ExceptionMetier extends \RuntimeException
     }
 
     /**
+     * Erreurs par champ d'un 422 métier : champ → clé de traduction (domaine « errors »). ApiExceptionSubscriber les traduit
+     * dans la langue de la requête et les renvoie sous « erreurs », comme pour une validation de DTO.
+     *
+     * @return array<string, string>
+     */
+    public function erreursChamps(): array
+    {
+        return [];
+    }
+
+    /**
      * Données complémentaires renvoyées au client (jamais d'information technique).
      *
      * @return array<string, scalar>
