@@ -42,8 +42,19 @@ services:
         arguments:
             $cleBase64: '%env(TOTP_ENC_KEY)%'
 
+    # Jaquettes téléversées (F-09) : dossier public/media/jaquettes, servi par le proxy sous /media/.
+    App\Infrastructure\Media\StockageJaquettesFichiers:
+        arguments:
+            $racine: '%kernel.project_dir%/public/media'
+
 when@test:
     services:
+        # Jaquettes des tests : dossier temporaire du cache de test, jamais public/media.
+        App\Infrastructure\Media\StockageJaquettesFichiers:
+            arguments:
+                $racine: '%kernel.cache_dir%/media'
+
+
         # Sonde RBAC des tests de sécurité F-03 : jamais chargée hors environnement de test.
         App\Tests\Support\Controller\:
             resource: '../tests/Support/Controller/'
