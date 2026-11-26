@@ -86,7 +86,10 @@ final class PaiementSecuriteTest extends PaiementWebTestCase
         } catch (\Throwable $e) {
             self::assertStringNotContainsString($numero, $e->getTraceAsString());
             self::assertStringNotContainsString('7391', $e->getTraceAsString());
-            self::assertStringContainsString('SensitiveParameterValue', $e->getTraceAsString());
+            // Selon php.ini, les arguments sont soit omis (zend.exception_ignore_args, cas de la production), soit présents mais masqués
+            if (!filter_var(\ini_get('zend.exception_ignore_args'), \FILTER_VALIDATE_BOOLEAN)) {
+                self::assertStringContainsString('SensitiveParameterValue', $e->getTraceAsString());
+            }
         }
     }
 
