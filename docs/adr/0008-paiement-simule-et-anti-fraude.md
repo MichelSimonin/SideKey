@@ -81,6 +81,19 @@ Les seuils sont lus dans la configuration Symfony, les compteurs dans Redis (`fr
 - Diagramme `seq-paiement` et `etats-commande` (voir [conventions UML](../uml/README.md)).
 - Dossier de projet : reprendre le comparatif des trois niveaux du §6.3 pour justifier le niveau Équilibré, et le rappeler dans le diaporama au titre de la sécurité.
 
+## Mise en œuvre (F-07, 26/11/2026)
+
+La décision est appliquée telle quelle ; la mise en œuvre précise six points que l'ADR laissait ouverts.
+
+1. **Un seul paiement actif par commande, garanti par la base.** L'ADR appelle le prestataire hors transaction et protège le rejeu d'une même clé ; il ne dit pas ce qui arrête deux requêtes simultanées avec deux clés différentes. Un index unique partiel (`uq_paiement_commande_actif`) l'impose à l'insertion.
+2. **Idempotence durable.** La clé stockée est l'empreinte de « client + clé ». `idem:{empreinte}` (Redis, 24 h) est le verrou rapide ; la colonne unique `paiement.cle_idempotence` est la mémoire durable : un rejeu après 24 h renvoie encore la même réponse, au lieu d'être traité comme un nouveau paiement (conséquence négative levée).
+3. **Où se contrôlent les seuils.** Le plafond de 10 clés et le blocage sont vérifiés **au paiement, avant tout débit** ; les clés ne sont comptées qu'après acceptation. La règle « à vérifier » s'applique après l'acceptation (paiement accepté, commande `A_VERIFIER`).
+4. **Fenêtre glissante.** Les clés payées sont un ensemble trié horodaté (`fraud:keys24h`), pas un compteur à TTL. Les échecs sont comptés sur la durée du blocage, et le blocage est posé par le script Lua qui compte (`fraud:fails`, `fraud:block`).
+5. **Redis injoignable : refus** (503), avant tout débit, comme l'ADR le demandait ; après le débit, la base fait foi et l'incident est journalisé.
+6. **Seuils validés au déploiement.** `ConfigurationFraude` refuse toute valeur hors bornes et le réchauffage du cache la construit : un seuil à 0 fait échouer `cache:warmup` (conséquence négative « configuration sensible » levée).
+
+**Reste à faire, hors périmètre de F-07** : la file « à vérifier » et la décision du back-office (F-10), l'e-mail de confirmation, les écrans du tunnel (E07, E08). Le diagramme [seq-paiement](../uml/exports/seq-paiement.svg) reflète la mise en œuvre.
+
 ## Références
 
 - [Cahier des charges v1.2](../cahier_des_charges_v1.2_SideKey.md) — §0.1 (F12), §0.3 (R3), §5.4 (US-30 à US-36), §6.2 à §6.4, §8.5, §9.8, §10.3, §11.2, §11.6.

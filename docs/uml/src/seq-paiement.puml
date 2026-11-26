@@ -4,11 +4,12 @@
 ' Objet    : paiement d'une commande par carte fictive, idempotence, refus,
 '            anti-fraude « Équilibré » et validation atomique des clés.
 ' Source   : docs/cahier_des_charges_v1.2_SideKey.md §5.4, §6.2, §6.3,
-'            §6.4, §10.3, §11.6
+'            §6.4, §10.3, §11.6 ; ADR-0008 ; implémentation F-07
+'            (api/src/Service/Paiement/PaiementService.php)
 ' Exports  : docs/uml/exports/seq-paiement.svg et .png (make uml)
 ' ============================================================================
 
-title Séquence — paiement simulé et validation de la commande\n<size:12>Hors transaction pendant l'appel au PSP · idempotence · anti-fraude « Équilibré »</size>
+title Séquence — paiement simulé et validation de la commande\n<size:12>Hors transaction pendant l'appel au prestataire · idempotence · anti-fraude « Équilibré »</size>
 
 skinparam shadowing false
 skinparam defaultFontName "Segoe UI"
@@ -30,79 +31,69 @@ autonumber "<b>00"
 participant "Client" as C
 participant "API\nPaiementController" as API
 participant "PaiementService" as PAY
-participant "AntiFraudeService" as FRAUD
-participant "PspSimule\n(Strategy)" as PSP
+participant "FournisseurPaiementSimule\n(Strategy)" as PSP
 database "PostgreSQL 17" as PG
 participant "Redis" as R
-participant "Messenger\n(e-mail FR/EN)" as MQ
 
-C -> API : POST /api/paiements\n{ reference, carte fictive, cleIdempotence }
+C -> API : POST /api/commandes/{reference}/paiement\nen-tête Idempotency-Key · { numeroCarte, expiration, cryptogramme }
 activate API
-API -> API : jeton JWT, rôle CLIENT,\nDTO validé (format, longueur)
-API -> PAY : payer(reference, carte, cleIdempotence)
+API -> API : jeton JWT, permission « commander »,\nDTO JSON validé (format) ; aucun montant lu
+API -> PAY : payer(compte, reference, carte, cle)
 activate PAY
+PAY -> PAY : clé stockée = SHA-256(client + clé) ;\ncarte : Luhn, expiration — <b>422</b> par champ si invalide\n(rien n'est compté)
 
-PAY -> R : GET idem:{cleIdempotence}
-alt clé d'idempotence déjà utilisée
-  R --> PAY : réponse enregistrée
-  PAY --> API : paiement déjà traité
-  API --> C : <b>200</b> — même réponse qu'au premier appel\n(aucun second débit)
+PAY -> PG : SELECT paiement WHERE cle_idempotence = empreinte\n(filtré sur le client)
+alt clé déjà enregistrée (rejeu)
+  PG --> PAY : tentative existante
+  PAY --> API : même réponse (aucun second débit, prestataire non rappelé)
+  API --> C : <b>200</b> + Idempotent-Replayed (accepté) · <b>402</b> (refusé) ·\n<b>409</b> (en cours, ou clé d'une autre commande)
 else première tentative
-  PAY -> PG : SELECT commande (statut = EN_ATTENTE_PAIEMENT,\nexpire_le > now())
-  alt commande expirée ou déjà payée
-    PAY --> API : CommandeNonPayableException
-    API --> C : <b>409</b> — commande expirée ou déjà réglée
+  PAY -> R : INCR rl:pay:{userId} (10 / h)\nGET fraud:block:{userId}\nZCOUNT fraud:keys24h:{userId} (fenêtre glissante 24 h)
+  note right of R : Redis injoignable → <b>503</b> :\non refuse, on ne laisse jamais passer sans contrôle\n(Fail Securely, ADR-0008).
+  PAY -> PG : SELECT commande, montant, nb de clés,\nancienneté du compte, première commande ?
+  alt client bloqué 1 h
+    PAY --> API : PaiementBloqueException
+    API --> C : <b>429</b> + Retry-After
+  else plafond de 10 clés / 24 h dépassé
+    PAY --> API : LimiteClesException
+    API --> C : <b>422</b> — avant tout débit, commande annulable
+  else commande introuvable, d'autrui, déjà payée,\nexpirée ou expirant dans moins de 30 s
+    PAY --> API : CommandeIntrouvable / NonPayable
+    API --> C : <b>404</b> (identique pour autrui) · <b>409</b>
   else commande payable
-    PAY -> FRAUD : verifier(utilisateur, montant, panier)
-    activate FRAUD
-    FRAUD -> R : GET fraud:keys24h:{userId}\nGET fraud:payfail:{userId}
-    FRAUD --> PAY : autorisé / bloqué 1 h (3 échecs)
-    deactivate FRAUD
-    PAY -> PG : INSERT paiement (montant, EN_ATTENTE,\ncle_idempotence, derniers_chiffres)
-    PAY -> PSP : autoriser(montant, carte)
+    PAY -> R : SET idem:{empreinte} NX EX 24 h
+    PAY -> PG : BEGIN ; SELECT commande FOR UPDATE ;\nINSERT paiement (montant de la base, EN_ATTENTE) ; COMMIT
+    note right of PG : Index unique partiel <b>uq_paiement_commande_actif</b> :\nun seul paiement EN_ATTENTE ou ACCEPTE par commande —\ndeux clés différentes, un seul débit possible.
+    PAY -> PSP : autoriser(montant en centimes, carte)
     activate PSP
     note right of PSP : Appel <b>hors transaction</b> (CDC §10.3) :\naucun verrou PostgreSQL n'est tenu\npendant l'appel au prestataire.
-    alt 4242 4242 4242 4242 — autorisé
-      PSP --> PAY : ACCEPTE (code 00)
+    alt 4242 4242 4242 4242 — accepté
+      PSP --> PAY : ACCEPTE (ok)
       deactivate PSP
-      alt règle anti-fraude déclenchée (compte < 24 h et montant > 150 €,\nou première commande > 200 €)
-        PAY -> PG : UPDATE commande SET statut = 'A_VERIFIER'
-        note right of PG : Les clés restent RESERVEE :\nelles ne sont pas révélables\net ne sont pas vendues.
-        PAY -> PG : UPDATE paiement SET statut = 'ACCEPTE', code_retour = '00'
-        PAY -> R : SETEX idem:{cleIdempotence} 24h (réponse)
-        PAY -> MQ : CommandeAVerifierMessage (file « à vérifier »)
-        PAY --> API : commande A_VERIFIER
-        API --> C : <b>200</b> — commande en cours de vérification\n(le client ne reçoit aucun détail technique)
-      else commande normale
-        PAY -> PG : BEGIN
-        PAY -> PG : SELECT fn_valider_commande(commande)
-        activate PG
-        PG -> PG : vérifie statut = EN_ATTENTE_PAIEMENT\net expire_le > now()
-        PG -> PG : UPDATE cle_licence SET statut = 'VENDUE'
-        PG -> PG : UPDATE commande SET statut = 'PAYEE', payee_le = now()
-        PG --> PAY : commande PAYEE
-        deactivate PG
-        PAY -> PG : UPDATE paiement SET statut = 'ACCEPTE', code_retour = '00'
-        PAY -> PG : COMMIT
-        PAY -> R : SETEX idem:{cleIdempotence} 24h (réponse)\nDEL resa:{commandeId}
-        PAY -> MQ : CommandePayeeMessage (e-mail dans la langue du client)
-        PAY --> API : commande PAYEE
-        API --> C : <b>200</b> — confirmation, clés dans « Mes commandes »
+      alt compte < 24 h et montant > 150 €,\nou première commande > 200 €
+        PAY -> PG : BEGIN ; UPDATE paiement ACCEPTE ;\nUPDATE commande SET statut = 'A_VERIFIER' ; COMMIT
+        note right of PG : Les clés restent RESERVEE :\nnon vendues, non révélables,\nnon libérées par l'expiration.
+      else commande ordinaire
+        PAY -> PG : BEGIN ; UPDATE paiement ACCEPTE ;\nSELECT fn_valider_commande(commande) ; COMMIT
+        PG -> PG : clés RESERVEE → VENDUE,\ncommande → PAYEE, payee_le = now()
       end
-    else 4000 0000 0000 0002 — refusé
-      PSP --> PAY : REFUSE (code 51)
+      PAY -> R : ZADD fraud:keys24h (clés payées) ; DEL fraud:fails ;\nDEL resa:{commandeId}
+      PAY -> PG : journal d'audit (PAIEMENT_ACCEPTE,\npuis COMMANDE_A_VERIFIER si besoin)
+      PAY --> API : commande PAYEE ou A_VERIFIER
+      API --> C : <b>200</b> — confirmation (clés dans « Mes commandes »)\nou « en cours de vérification », sans détail technique
+    else 4000…0002 refusé · …9995 fonds insuffisants · …0119 délai dépassé
+      PSP --> PAY : REFUSE ou ERREUR (code de retour)
       deactivate PSP
-      PAY -> PG : UPDATE paiement SET statut = 'REFUSE', code_retour = '51'
-      PAY -> R : INCR fraud:payfail:{userId} EX 1h
-      note right of R : 3 échecs → clé rl:pay:{userId}\nbloquée 1 heure (CDC §6.3).
-      PAY --> API : PaiementRefuseException
-      API --> C : <b>402</b> — paiement refusé, réservation conservée\njusqu'à la fin du TTL de 15 min (US-36)
+      PAY -> PG : UPDATE paiement SET statut = 'REFUSE' | 'ERREUR'
+      PAY -> R : script Lua : INCR fraud:fails (TTL 1 h) ;\n3e échec → SET fraud:block EX 1 h
+      PAY --> API : PaiementRefuseException (code, tentatives restantes)
+      API --> C : <b>402</b> — réservation conservée jusqu'à la fin\ndu TTL de 15 min ; nouvel essai avec une nouvelle clé (US-36)
     end
   end
 end
 deactivate PAY
 deactivate API
 
-note over C, MQ : La clé n'est déchiffrée qu'à la révélation par son propriétaire\n(voir seq-revelation-cle) ; aucune donnée de carte n'est stockée,\nseuls le code retour et les 4 derniers chiffres sont conservés.
+note over C, R : Aucune donnée de carte n'est stockée ni journalisée :\nseuls le code de retour et les 4 derniers chiffres sont conservés.\nLa clé de licence n'est déchiffrée qu'à la révélation par son propriétaire (voir seq-revelation-cle).\nL'e-mail de confirmation (Messenger) n'est pas encore branché.
 
 @enduml

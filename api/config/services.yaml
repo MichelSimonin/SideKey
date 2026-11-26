@@ -7,6 +7,14 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    # Anti-fraude « Équilibré » (RG-14, CDC §6.3, ADR-0008) : seuils ajustables sans toucher au code. Chaque valeur est
+    # contrôlée par ConfigurationFraude (bornes minimales) à chaque réchauffage du cache : un seuil à 0 empêche le déploiement.
+    sidekey.fraude.cles_max_24h: 10                  # clés au plus par client sur 24 h glissantes
+    sidekey.fraude.echecs_max: 3                     # échecs de paiement avant blocage
+    sidekey.fraude.blocage_secondes: 3600            # durée du blocage (1 h)
+    sidekey.fraude.compte_recent_heures: 24          # un compte plus jeune est « récent »
+    sidekey.fraude.seuil_compte_recent_euros: 150    # compte récent : commande « à vérifier » au-delà de ce montant
+    sidekey.fraude.seuil_premiere_commande_euros: 200  # première commande : « à vérifier » au-delà de ce montant
 
 services:
     # default configuration for services in *this* file
@@ -46,6 +54,16 @@ services:
     App\Infrastructure\Media\StockageJaquettesFichiers:
         arguments:
             $racine: '%kernel.project_dir%/public/media'
+
+    # Seuils anti-fraude (F-07) : paramètres sidekey.fraude.* ci-dessus.
+    App\Service\Paiement\ConfigurationFraude:
+        arguments:
+            $clesMax24h: '%sidekey.fraude.cles_max_24h%'
+            $echecsMax: '%sidekey.fraude.echecs_max%'
+            $blocageSecondes: '%sidekey.fraude.blocage_secondes%'
+            $compteRecentHeures: '%sidekey.fraude.compte_recent_heures%'
+            $seuilCompteRecentEuros: '%sidekey.fraude.seuil_compte_recent_euros%'
+            $seuilPremiereCommandeEuros: '%sidekey.fraude.seuil_premiere_commande_euros%'
 
 when@test:
     services:

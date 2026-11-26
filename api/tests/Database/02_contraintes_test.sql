@@ -59,6 +59,22 @@ BEGIN
         format($q$INSERT INTO paiement (montant, statut, cle_idempotence, commande_id) VALUES (29.99, 'ACCEPTE', 'idem-1', %L)$q$, c),
         '23505', 'US-32 : clé d''idempotence réutilisée refusée (uq_paiement_idempotence)');
 
+    -- F-07 : un seul paiement en cours ou accepté par commande (le prestataire est appelé hors transaction) ;
+    -- un paiement refusé ou en erreur ne bloque pas un nouvel essai (US-36)
+    PERFORM pg_temp.rejette(
+        format($q$INSERT INTO paiement (montant, statut, cle_idempotence, commande_id) VALUES (29.99, 'EN_ATTENTE', 'idem-2', %L)$q$, c),
+        '23505', 'F-07 : second paiement actif sur la même commande refusé (uq_paiement_commande_actif)');
+    c := pg_temp.mk_commande();
+    INSERT INTO paiement (montant, statut, cle_idempotence, commande_id) VALUES (10, 'REFUSE', 'idem-r1', c);
+    INSERT INTO paiement (montant, statut, cle_idempotence, commande_id) VALUES (10, 'ERREUR', 'idem-r2', c);
+    INSERT INTO paiement (montant, statut, cle_idempotence, commande_id) VALUES (10, 'EN_ATTENTE', 'idem-r3', c);
+    PERFORM pg_temp.ok(true, 'F-07 : des essais refusés puis un paiement en cours sont acceptés sur la même commande');
+    PERFORM pg_temp.rejette(
+        format($q$INSERT INTO paiement (montant, statut, cle_idempotence, commande_id) VALUES (10, 'ACCEPTE', 'idem-r4', %L)$q$, c),
+        '23505', 'F-07 : un paiement ACCEPTE ne peut pas coexister avec un paiement EN_ATTENTE de la même commande');
+    c := pg_temp.mk_commande();
+    PERFORM pg_temp.mk_ligne(c, o);
+
     u := pg_temp.mk_user();
     INSERT INTO avis (note, commentaire, utilisateur_id, jeu_id, langue_code) VALUES (5, 'Très bon jeu, clé reçue tout de suite.', u, j, 'fr');
     PERFORM pg_temp.rejette(

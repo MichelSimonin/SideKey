@@ -165,6 +165,9 @@ Toutes les mesures ci-dessous sont **prévues** : aucune n'est encore livrée au
 | Refus explicite si le stock est insuffisant | ENF-03 | §14.2 réservation (exception levée) | F-06, T-02 |
 | Montant recalculé côté serveur | ENF-09 | Prix modifié dans la requête → ignoré | F-06 |
 | Idempotence du paiement (clé `UNIQUE`) | ENF-09 | Double paiement → un seul paiement | F-07 |
+| Un seul paiement actif par commande (index unique partiel) | ENF-09 | Deux paiements simultanés, deux clés différentes → un seul atteint le prestataire | F-07 |
+| Aucune donnée de carte conservée ni journalisée | ENF-09 | Aucun numéro dans aucune table, Redis, journal ni réponse | F-07 |
+| Refus du paiement si Redis est injoignable (Fail Securely) | ENF-09 | Redis arrêté → 503, aucun débit | F-07 |
 | Seuils anti-fraude Équilibré (RG-14) | ENF-09 | §14.1 anti-fraude (unitaires) et scénario 6 | F-07 |
 | Voters de propriété sur commandes et clés | ENF-09 | IDOR sur une commande ou une clé → 403/404 | F-03, F-10 |
 | Rôle et A2F exigés sous `/api/admin/**` | ENF-09 | Accès admin sans rôle, ou avec rôle mais sans A2F → 403 | F-04 |

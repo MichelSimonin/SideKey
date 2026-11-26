@@ -58,7 +58,8 @@ api/src/
 ├── Infrastructure/Redis/    panier, réservations, révocation, compteurs, cache
 ├── Infrastructure/Crypto/   AES-256-GCM (clés) et HMAC-SHA256 (empreintes)
 ├── Infrastructure/Media/    jaquettes sur disque (public/media), nom régénéré, écriture atomique
-├── Infrastructure/Payment/  PSP simulé derrière PaymentProviderInterface
+├── Infrastructure/Payment/  prestataire de paiement simulé (FournisseurPaiementSimule), Strategy
+├── Infrastructure/Config/   validation des seuils anti-fraude au réchauffage du cache
 ├── Security/                utilisateur, fournisseur, permissions (matrice RBAC), jetons JWT, cookies et CSRF
 ├── Security/Voter/          autorisations (rôle + propriété)
 ├── EventSubscriber/         en-têtes de sécurité, exceptions JSON
@@ -189,3 +190,14 @@ retourné par l'API (`US-13`), jamais un calcul local.
 | Infrastructure | Fichiers de jaquettes : nom régénéré, écriture atomique, suppression limitée à ses propres fichiers | `Infrastructure/Media/StockageJaquettesFichiers` |
 
 Les interfaces (`JeuxAdmin`, `OffresAdmin`, `EditeursAdmin`, `PlateformesAdmin`, `StockageJaquettes`) sont déclarées côté métier et implémentées côté données : les services se testent avec des doublures, les dépôts contre PostgreSQL. Les jaquettes sont servies par Nginx sous `/media/` (image statique, `nosniff`, CSP restrictive), jamais par PHP.
+
+### 7.3 Paiement : qui fait quoi (F-07)
+
+| Couche | Rôle dans F-07 | Fichiers |
+|---|---|---|
+| Présentation | Permission « commander », corps JSON limité à la carte (aucun montant), en-tête `Idempotency-Key`, réponse `no-store` et `Idempotent-Replayed` | `Controller/Api/PaiementController`, `Dto/Request/PayerCommandeRequest`, `Dto/Response/PaiementResponse` |
+| Métier | Ordre du paiement (rejeu, contrôles avant débit, prestataire **hors transaction**, issue payée ou à vérifier), règles RG-14 pures, carte non conservée, audit | `Service/Paiement/PaiementService`, `PolitiqueFraude`, `ConfigurationFraude`, `CartePaiement`, `CleIdempotence` |
+| Données | Deux transactions courtes autour de l'appel (ouverture avec verrou de la commande, acceptation atomique du paiement et de la commande) ; l'**index unique des paiements actifs** empêche le double débit | `Repository/PaiementRepository`, `sql/schema/005_paiement_actif.sql` |
+| Infrastructure | Prestataire simulé (Strategy), compteurs anti-fraude et idempotence dans Redis (script Lua, ensemble trié) | `Infrastructure/Payment/FournisseurPaiementSimule`, `Infrastructure/Redis/RedisCompteursFraude`, `RedisIdempotence` |
+
+Les ports (`FournisseurPaiement`, `Paiements`, `CompteursFraude`, `Idempotence`) sont déclarés côté métier : le service se teste avec des doublures, le dépôt contre PostgreSQL et les compteurs contre un vrai Redis. Redis injoignable : le paiement est **refusé** (503), jamais accepté sans contrôle.
